@@ -60,7 +60,7 @@ See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Quick start (manual setup)
 
-Tested with Python 3.13.7 on macOS. The package declares Python 3.11 or later, but other versions were not tested.
+Tested with Python 3.13.7 on macOS. The continuous-integration workflow (`.github/workflows/tests.yml`) also runs the full test suite on Linux with Python 3.11 and 3.13 on every push.
 
 ```bash
 cd ~/CyberLiquidity
