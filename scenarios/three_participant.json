@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "id": "three-participant-check",
+  "name": "Three-participant hand check",
+  "description": "Manually verifiable example. A pays B 100 in hour 1; B pays C 100 in hour 2. In the stress run only A's payment route is unavailable during hours 1-2 and available again from hour 3. Amounts are whole units of the test currency XTS (no minor units).",
+  "synthetic": true,
+  "currency": {"code": "XTS", "minor_units": 0},
+  "horizon_hours": 6,
+  "services": [
+    {"id": "provider_a", "name": "Provider used by A", "kind": "payment_provider", "capacity_per_hour": 10},
+    {"id": "provider_b", "name": "Provider used by B", "kind": "payment_provider", "capacity_per_hour": 10}
+  ],
+  "routes": [
+    {"id": "route_a", "name": "A's payment route", "path": ["provider_a"]},
+    {"id": "route_b", "name": "B's payment route", "path": ["provider_b"]}
+  ],
+  "participants": [
+    {"id": "A", "name": "Participant A", "initial_balance": 100},
+    {"id": "B", "name": "Participant B", "initial_balance": 0},
+    {"id": "C", "name": "Participant C", "initial_balance": 0}
+  ],
+  "external_parties": [],
+  "obligations": [
+    {"id": "O1", "payer": "A", "recipient": "B", "amount": 100, "due_hour": 1, "priority": 2, "routes": ["route_a"], "purpose": "A pays B"},
+    {"id": "O2", "payer": "B", "recipient": "C", "amount": 100, "due_hour": 2, "priority": 2, "routes": ["route_b"], "purpose": "B pays C"}
+  ],
+  "disruptions": [
+    {"id": "D1", "service": "provider_a", "start_hour": 1, "duration_hours": 2, "severity_pct": 100, "description": "A's provider is unavailable in hours 1 and 2."}
+  ],
+  "interventions": [],
+  "candidate_interventions": [
+    {"type": "liquidity_buffer", "id": "buffer_B", "allocations": [{"participant": "B", "amount": 100}], "funding_hour": 0, "description": "Pre-fund B with 100 at hour 0."}
+  ]
+}

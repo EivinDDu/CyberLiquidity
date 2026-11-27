@@ -1,0 +1,11 @@
+first,second,label,first_alone_pct,second_alone_pct,together_pct,independent_benchmark_pct,excess_pp,verdict,offsetting_batches,held_back_payments
+backup_h2h,buffer_birch,Backup payment provider + Liquidity buffer,87.7,51.09,92.36,93.99,-1.62,overlapping,0,0
+backup_h2h,faster_recovery,Backup payment provider + Faster service recovery,87.7,61.16,87.7,95.22,-7.52,overlapping,0,0
+backup_h2h,offsetting,Backup payment provider + Multilateral offsetting,87.7,37.91,91.4,92.36,-0.96,roughly independent,1,0
+backup_h2h,reserve_payroll,Backup payment provider + Payroll-protection reserve,87.7,-12.03,87.7,86.22,1.48,less harmful together,0,0
+buffer_birch,faster_recovery,Liquidity buffer + Faster service recovery,51.09,61.16,80.49,81.0,-0.51,roughly independent,0,0
+buffer_birch,offsetting,Liquidity buffer + Multilateral offsetting,51.09,37.91,51.09,69.63,-18.54,overlapping,0,0
+buffer_birch,reserve_payroll,Liquidity buffer + Payroll-protection reserve,51.09,-12.03,-5.66,45.21,-50.87,more harmful together,0,12
+faster_recovery,offsetting,Faster service recovery + Multilateral offsetting,61.16,37.91,76.0,75.88,0.12,roughly independent,1,0
+faster_recovery,reserve_payroll,Faster service recovery + Payroll-protection reserve,61.16,-12.03,57.31,56.49,0.83,roughly independent,0,4
+offsetting,reserve_payroll,Multilateral offsetting + Payroll-protection reserve,37.91,-12.03,-12.03,30.44,-42.47,more harmful together,0,6

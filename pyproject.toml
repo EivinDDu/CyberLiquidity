@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cyberliquidity"
+version = "0.3.0"
+description = "Deterministic research simulator linking cyber-operational service disruptions to payment delays and liquidity propagation (synthetic data only)."
+readme = "README.md"
+requires-python = ">=3.11"
+# The simulation engine itself depends only on Pydantic; the interface and the
+# experiment plot are optional extras so the engine can sit behind other frontends.
+dependencies = ["pydantic>=2.11,<3"]
+
+[project.optional-dependencies]
+app = ["streamlit>=1.50", "plotly>=6", "pandas>=2.2"]
+experiment = ["matplotlib>=3.9"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+cyberliquidity = "cyberliquidity.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "app"]
+addopts = "-ra"

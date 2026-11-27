@@ -1,0 +1,938 @@
+{
+  "$defs": {
+    "BackupRouteIntervention": {
+      "additionalProperties": false,
+      "description": "Independent backup payment provider: an extra eligible route after an activation delay.\n\nFrom ``active_from_hour`` every obligation that lists one of ``primary_routes``\n(optionally only for ``payers``) may also settle through ``backup_route``. The\nprimary route stays preferred whenever it is usable. The backup has its own\ndependencies and capacity, shared with its existing users; it is *not* assumed\nindependent of the failure - that follows from the dependency graph.",
+      "properties": {
+        "type": {
+          "const": "backup_route",
+          "default": "backup_route",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "primary_routes": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Primary Routes",
+          "type": "array"
+        },
+        "backup_route": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Backup Route",
+          "type": "string"
+        },
+        "active_from_hour": {
+          "minimum": 0,
+          "title": "Active From Hour",
+          "type": "integer"
+        },
+        "payers": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:\\-]+$",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payers"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "primary_routes",
+        "backup_route",
+        "active_from_hour"
+      ],
+      "title": "BackupRouteIntervention",
+      "type": "object"
+    },
+    "BufferAllocation": {
+      "additionalProperties": false,
+      "properties": {
+        "participant": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Participant",
+          "type": "string"
+        },
+        "amount": {
+          "exclusiveMinimum": 0,
+          "title": "Amount",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "participant",
+        "amount"
+      ],
+      "title": "BufferAllocation",
+      "type": "object"
+    },
+    "CreditFacility": {
+      "additionalProperties": false,
+      "properties": {
+        "participant": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Participant",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Maximum outstanding drawn amount in minor units.",
+          "exclusiveMinimum": 0,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "participant",
+        "limit"
+      ],
+      "title": "CreditFacility",
+      "type": "object"
+    },
+    "CreditLineIntervention": {
+      "additionalProperties": false,
+      "description": "Committed intraday credit line, drawn only when a payment would otherwise fail for lack of cash.\n\nFrom ``available_from_hour`` a payment whose route is usable but whose payer is short\nof cash draws exactly the shortfall (if the undrawn limit covers it). At the end of\nevery hour, the participant's cash repays outstanding draws first. Every draw and\nrepayment is an explicit ledger entry with an account outside the accounting\nboundary. Draws and repayments are book entries and need no payment route.",
+      "properties": {
+        "type": {
+          "const": "credit_line",
+          "default": "credit_line",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "facilities": {
+          "items": {
+            "$ref": "#/$defs/CreditFacility"
+          },
+          "minItems": 1,
+          "title": "Facilities",
+          "type": "array"
+        },
+        "available_from_hour": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Available From Hour",
+          "type": "integer"
+        },
+        "provider": {
+          "default": "Credit provider (outside the accounting boundary)",
+          "title": "Provider",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "facilities"
+      ],
+      "title": "CreditLineIntervention",
+      "type": "object"
+    },
+    "Currency": {
+      "additionalProperties": false,
+      "description": "Single configurable currency. The code is a label only; there is no FX model.",
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "minor_units": {
+          "description": "Decimal places of the minor unit (2 for cents).",
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Minor Units",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "code",
+        "minor_units"
+      ],
+      "title": "Currency",
+      "type": "object"
+    },
+    "Disruption": {
+      "additionalProperties": false,
+      "description": "A service disruption.\n\nOutage phase: hours ``[start_hour, start_hour + duration_hours)`` at\n``100 - severity_pct`` percent capacity (0 percent, i.e. unavailable, when\n``severity_pct`` is 100). Optional recovery phase: the following\n``recovery_hours`` hours at ``recovery_capacity_pct`` percent. Afterwards the\nservice is fully available again.",
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "service": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Service",
+          "type": "string"
+        },
+        "start_hour": {
+          "minimum": 0,
+          "title": "Start Hour",
+          "type": "integer"
+        },
+        "duration_hours": {
+          "minimum": 0,
+          "title": "Duration Hours",
+          "type": "integer"
+        },
+        "severity_pct": {
+          "default": 100,
+          "description": "Share of capacity lost during the outage phase.",
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Severity Pct",
+          "type": "integer"
+        },
+        "recovery_hours": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Recovery Hours",
+          "type": "integer"
+        },
+        "recovery_capacity_pct": {
+          "default": 50,
+          "maximum": 99,
+          "minimum": 1,
+          "title": "Recovery Capacity Pct",
+          "type": "integer"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "service",
+        "start_hour",
+        "duration_hours"
+      ],
+      "title": "Disruption",
+      "type": "object"
+    },
+    "ExternalParty": {
+      "additionalProperties": false,
+      "description": "A counterparty outside the accounting boundary (no modelled cash constraint).",
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "ExternalParty",
+      "type": "object"
+    },
+    "FasterRecoveryIntervention": {
+      "additionalProperties": false,
+      "description": "Faster service recovery: shorten one disruption's outage phase, nothing else.",
+      "properties": {
+        "type": {
+          "const": "faster_recovery",
+          "default": "faster_recovery",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "disruption": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Disruption",
+          "type": "string"
+        },
+        "duration_reduction_hours": {
+          "exclusiveMinimum": 0,
+          "title": "Duration Reduction Hours",
+          "type": "integer"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "disruption",
+        "duration_reduction_hours"
+      ],
+      "title": "FasterRecoveryIntervention",
+      "type": "object"
+    },
+    "LiquidityBufferIntervention": {
+      "additionalProperties": false,
+      "description": "Finite liquidity buffer: explicit funding transfers into selected participants.\n\nEach allocation is recorded as an ``intervention_funding`` ledger entry from an\naccount outside the accounting boundary at ``funding_hour``. It creates no\nunexplained cash and does not touch the operational network.",
+      "properties": {
+        "type": {
+          "const": "liquidity_buffer",
+          "default": "liquidity_buffer",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "allocations": {
+          "items": {
+            "$ref": "#/$defs/BufferAllocation"
+          },
+          "minItems": 1,
+          "title": "Allocations",
+          "type": "array"
+        },
+        "funding_hour": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Funding Hour",
+          "type": "integer"
+        },
+        "funder": {
+          "default": "External liquidity provider (outside the accounting boundary)",
+          "title": "Funder",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "allocations"
+      ],
+      "title": "LiquidityBufferIntervention",
+      "type": "object"
+    },
+    "Obligation": {
+      "additionalProperties": false,
+      "description": "A payment obligation. All obligations are pending at the start of a run.\n\n``routes`` lists the eligible payment routes in preference order. The settlement\nstatus is an *output* of the simulation (see ``engine.ObligationOutcome``).",
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "payer": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Payer",
+          "type": "string"
+        },
+        "recipient": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Recipient",
+          "type": "string"
+        },
+        "amount": {
+          "description": "Minor units.",
+          "exclusiveMinimum": 0,
+          "title": "Amount",
+          "type": "integer"
+        },
+        "due_hour": {
+          "description": "On time if settled by the end of this hour.",
+          "minimum": 0,
+          "title": "Due Hour",
+          "type": "integer"
+        },
+        "priority": {
+          "default": 3,
+          "description": "1 = most urgent.",
+          "maximum": 9,
+          "minimum": 1,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "routes": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Routes",
+          "type": "array"
+        },
+        "purpose": {
+          "default": "",
+          "title": "Purpose",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "payer",
+        "recipient",
+        "amount",
+        "due_hour",
+        "routes"
+      ],
+      "title": "Obligation",
+      "type": "object"
+    },
+    "OffsettingIntervention": {
+      "additionalProperties": false,
+      "description": "Gridlock resolution: hourly multilateral offsetting of queued payments (a liquidity-saving mechanism).\n\nFrom ``active_from_hour``, after the normal settlement loop of each hour, the payment\nsystem looks for a set of queued payments that can settle *simultaneously*. Every\npayment in the set needs a usable route with spare capacity, and every participant's\nnet outflow over the set must be covered by its available cash plus undrawn committed\ncredit. Starting from all candidates in queue order, the rule repeatedly removes the\nlast payment (in queue order) of the participant with the largest uncovered net\nposition until the set is covered; the remaining payments settle together. Each\nobligation is discharged in full, but cash moves net, through a clearing account\noutside the accounting boundary that is empty again after every batch. The search is\nrepeated (after the normal loop) until nothing more settles in the hour.",
+      "properties": {
+        "type": {
+          "const": "offsetting",
+          "default": "offsetting",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "active_from_hour": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Active From Hour",
+          "type": "integer"
+        },
+        "operator": {
+          "default": "Payment system operator (clearing account outside the accounting boundary)",
+          "title": "Operator",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "OffsettingIntervention",
+      "type": "object"
+    },
+    "Participant": {
+      "additionalProperties": false,
+      "description": "A funded participant inside the accounting boundary (has a cash account).",
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sector": {
+          "default": "",
+          "title": "Sector",
+          "type": "string"
+        },
+        "initial_balance": {
+          "description": "Opening cash in minor units.",
+          "minimum": 0,
+          "title": "Initial Balance",
+          "type": "integer"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "initial_balance"
+      ],
+      "title": "Participant",
+      "type": "object"
+    },
+    "PriorityReserveIntervention": {
+      "additionalProperties": false,
+      "description": "Treasury rule: hold back routine payments to keep cash for urgent ones (liquidity reservation).\n\nFrom ``active_from_hour`` each covered participant releases a payment whose priority\nis *worse* than ``protected_priority`` only if, after paying it, its available cash\nplus undrawn committed credit still covers every unsettled payment of priority\n``protected_priority`` or better that falls due before ``hour + lookahead_hours``\n(overdue ones included). Protected payments are never held back by the rule. It uses\nonly the participant's own known payment calendar and changes nothing else.\n``participants = None`` applies the rule to every participant.",
+      "properties": {
+        "type": {
+          "const": "priority_reserve",
+          "default": "priority_reserve",
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "participants": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:\\-]+$",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Participants"
+        },
+        "protected_priority": {
+          "default": 1,
+          "description": "Payments with priority <= this are protected.",
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Protected Priority",
+          "type": "integer"
+        },
+        "lookahead_hours": {
+          "default": 24,
+          "description": "How far ahead protected payments are reserved for.",
+          "minimum": 1,
+          "title": "Lookahead Hours",
+          "type": "integer"
+        },
+        "active_from_hour": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Active From Hour",
+          "type": "integer"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "PriorityReserveIntervention",
+      "type": "object"
+    },
+    "Route": {
+      "additionalProperties": false,
+      "description": "An ordered path of services that must all process a payment.\n\nSettling one payment through a route consumes one unit of hourly capacity at\nevery capacity-limited service on the path.",
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "path": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:\\-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Path",
+          "type": "array"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "path"
+      ],
+      "title": "Route",
+      "type": "object"
+    },
+    "Service": {
+      "additionalProperties": false,
+      "description": "An operational service.\n\nDependency edges point from this service to the services it depends on\n(``this -> dependency``). Meaning:\n\n* ``requires_all``: every listed service must be operational (logical AND);\n* ``requires_any``: each group is a set of interchangeable alternatives, at\n  least one of which must be operational (failover, logical OR).\n\nA failure therefore propagates *against* the edge direction, from a dependency\nto its dependents.",
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:\\-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ServiceKind"
+        },
+        "capacity_per_hour": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Payments the service can process per hour, shared by all users; null = not throughput-limited.",
+          "title": "Capacity Per Hour"
+        },
+        "requires_all": {
+          "default": [],
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:\\-]+$",
+            "type": "string"
+          },
+          "title": "Requires All",
+          "type": "array"
+        },
+        "requires_any": {
+          "default": [],
+          "items": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.:\\-]+$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Requires Any",
+          "type": "array"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind"
+      ],
+      "title": "Service",
+      "type": "object"
+    },
+    "ServiceKind": {
+      "enum": [
+        "cloud",
+        "identity",
+        "payment_provider",
+        "settlement",
+        "channel",
+        "other"
+      ],
+      "title": "ServiceKind",
+      "type": "string"
+    },
+    "SimulationSettings": {
+      "additionalProperties": false,
+      "description": "Switchable engine assumptions (defaults are the documented baseline rules).\n\n* ``ordering``: queue order. ``priority_due_id`` = (priority, due hour, id);\n  ``due_id`` = (due hour, id), i.e. FIFO ignoring priority.\n* ``liquidity_recycling``: ``within_step`` lets cash received in hour h fund\n  further payments in hour h; ``next_step`` makes it usable from hour h+1.",
+      "properties": {
+        "ordering": {
+          "default": "priority_due_id",
+          "enum": [
+            "priority_due_id",
+            "due_id"
+          ],
+          "title": "Ordering",
+          "type": "string"
+        },
+        "liquidity_recycling": {
+          "default": "within_step",
+          "enum": [
+            "within_step",
+            "next_step"
+          ],
+          "title": "Liquidity Recycling",
+          "type": "string"
+        }
+      },
+      "title": "SimulationSettings",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A complete, self-contained run configuration.\n\n``disruptions`` and ``interventions`` are applied when the scenario is simulated.\n``candidate_interventions`` are presets used by comparisons (the app and the\n``compare`` command); the engine ignores them.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "id": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:\\-]+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "synthetic": {
+      "default": true,
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "disclaimer": {
+      "default": "Synthetic scenario. Results are conditional on model assumptions and are not forecasts of real incidents.",
+      "title": "Disclaimer",
+      "type": "string"
+    },
+    "currency": {
+      "$ref": "#/$defs/Currency"
+    },
+    "horizon_hours": {
+      "maximum": 744,
+      "minimum": 1,
+      "title": "Horizon Hours",
+      "type": "integer"
+    },
+    "services": {
+      "items": {
+        "$ref": "#/$defs/Service"
+      },
+      "minItems": 1,
+      "title": "Services",
+      "type": "array"
+    },
+    "routes": {
+      "items": {
+        "$ref": "#/$defs/Route"
+      },
+      "minItems": 1,
+      "title": "Routes",
+      "type": "array"
+    },
+    "participants": {
+      "items": {
+        "$ref": "#/$defs/Participant"
+      },
+      "minItems": 1,
+      "title": "Participants",
+      "type": "array"
+    },
+    "external_parties": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ExternalParty"
+      },
+      "title": "External Parties",
+      "type": "array"
+    },
+    "obligations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Obligation"
+      },
+      "title": "Obligations",
+      "type": "array"
+    },
+    "disruptions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Disruption"
+      },
+      "title": "Disruptions",
+      "type": "array"
+    },
+    "interventions": {
+      "default": [],
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "backup_route": "#/$defs/BackupRouteIntervention",
+            "credit_line": "#/$defs/CreditLineIntervention",
+            "faster_recovery": "#/$defs/FasterRecoveryIntervention",
+            "liquidity_buffer": "#/$defs/LiquidityBufferIntervention",
+            "offsetting": "#/$defs/OffsettingIntervention",
+            "priority_reserve": "#/$defs/PriorityReserveIntervention"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/BackupRouteIntervention"
+          },
+          {
+            "$ref": "#/$defs/LiquidityBufferIntervention"
+          },
+          {
+            "$ref": "#/$defs/FasterRecoveryIntervention"
+          },
+          {
+            "$ref": "#/$defs/CreditLineIntervention"
+          },
+          {
+            "$ref": "#/$defs/OffsettingIntervention"
+          },
+          {
+            "$ref": "#/$defs/PriorityReserveIntervention"
+          }
+        ]
+      },
+      "title": "Interventions",
+      "type": "array"
+    },
+    "candidate_interventions": {
+      "default": [],
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "backup_route": "#/$defs/BackupRouteIntervention",
+            "credit_line": "#/$defs/CreditLineIntervention",
+            "faster_recovery": "#/$defs/FasterRecoveryIntervention",
+            "liquidity_buffer": "#/$defs/LiquidityBufferIntervention",
+            "offsetting": "#/$defs/OffsettingIntervention",
+            "priority_reserve": "#/$defs/PriorityReserveIntervention"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/BackupRouteIntervention"
+          },
+          {
+            "$ref": "#/$defs/LiquidityBufferIntervention"
+          },
+          {
+            "$ref": "#/$defs/FasterRecoveryIntervention"
+          },
+          {
+            "$ref": "#/$defs/CreditLineIntervention"
+          },
+          {
+            "$ref": "#/$defs/OffsettingIntervention"
+          },
+          {
+            "$ref": "#/$defs/PriorityReserveIntervention"
+          }
+        ]
+      },
+      "title": "Candidate Interventions",
+      "type": "array"
+    },
+    "settings": {
+      "$ref": "#/$defs/SimulationSettings",
+      "default": {
+        "ordering": "priority_due_id",
+        "liquidity_recycling": "within_step"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "currency",
+    "horizon_hours",
+    "services",
+    "routes",
+    "participants"
+  ],
+  "title": "Scenario",
+  "type": "object"
+}

@@ -1,0 +1,17 @@
+{
+  "engine_version": "0.1.0",
+  "note": "Results digests produced by engine v0.1.0 before the v0.2 changes; v0.2 must reproduce them for scenarios that use only v0.1 features.",
+  "digests": {
+    "default_baseline": "c63ed8db73ecfbc1ba3aa035c9e9b3eb7efaa838253fcf7a8f9b81bcbe1d689c",
+    "default_stress": "f18425c1206d1fff9b92ea9dc3f2768be255bbf16308f44fe878df752e53a56a",
+    "default_stress+backup_beta": "5a04e19fc564557b652bb370b0de2c47b4fb00f9f38010b3f524b87df415b447",
+    "default_stress+buffer_producers": "4b5803fd77ca09c2bab82fe0e3b258eea02e72194faeb902af8d156d7f041b2e",
+    "default_stress+faster_recovery": "2b9cec247409007ba2ca9574d5712395eb24ab36e3d4417ecbe1863aa1f0b555",
+    "default_keygate_10h": "96a98c82279fe1fedc5cb6c7c17a5c0eab92cb0c19967b90a88aefbf71f48dd8",
+    "default_fifo": "6facbc13b304d13ffdbe4a0efdc34875993d6aebf32400313f95d983cc23139c",
+    "default_next_step": "dad714a0909cbb5164d8158f98806fd3f738f573611de05e0b5bcca4a7c9b7eb",
+    "default_cash_reference": "096945912737d53db7b2315e0fc07d6cc647253c6891cae38fffa3dd5b327aa8",
+    "three_stress": "c64f754eacca308518cff26f426590f027505086158c751753ec6c589ad69a38",
+    "three_stress+buffer_B": "4c514f4c9a6ba295eab8f45f22185ec4450a6868ed51bee795f35ed405b11ac1"
+  }
+}

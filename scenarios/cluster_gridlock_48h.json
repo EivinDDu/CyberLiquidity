@@ -1,0 +1,789 @@
+{
+  "schema_version": "1.0",
+  "id": "cluster-gridlock-48h",
+  "name": "Illustrative circular-trade cluster, 48 hours",
+  "description": "Eight fictional manufacturing firms on one industrial estate that buy from, rent from and deliver to one another, a payment service provider in one cloud region, and one local bank. Synthetic and uncalibrated; constructed so that payment gridlock can occur when an outside customer's payment is stuck.",
+  "synthetic": true,
+  "disclaimer": "Synthetic scenario. Results are conditional on model assumptions and are not forecasts of real incidents.",
+  "currency": {
+    "code": "EUR",
+    "minor_units": 2
+  },
+  "horizon_hours": 48,
+  "services": [
+    {
+      "id": "cloud_east",
+      "name": "East Cloud Region",
+      "kind": "cloud",
+      "capacity_per_hour": null,
+      "requires_all": [],
+      "requires_any": [],
+      "description": "Fictional public-cloud region. Hosts PSP Gamma."
+    },
+    {
+      "id": "psp_gamma",
+      "name": "PSP Gamma",
+      "kind": "payment_provider",
+      "capacity_per_hour": 10,
+      "requires_all": [
+        "cloud_east"
+      ],
+      "requires_any": [],
+      "description": "Fictional payment service provider that collects the cluster's payments from outside customers."
+    },
+    {
+      "id": "ebank_cluster",
+      "name": "Cluster Bank e-banking",
+      "kind": "channel",
+      "capacity_per_hour": 30,
+      "requires_all": [],
+      "requires_any": [],
+      "description": "Cluster Bank's on-premises e-banking channel; the firms send their own payments through it."
+    },
+    {
+      "id": "h2h_cluster",
+      "name": "Cluster Bank host-to-host link",
+      "kind": "channel",
+      "capacity_per_hour": 3,
+      "requires_all": [],
+      "requires_any": [],
+      "description": "Narrow direct link for large corporate customers; can be opened as a backup collection channel."
+    },
+    {
+      "id": "core_cluster",
+      "name": "Cluster Bank core ledger",
+      "kind": "settlement",
+      "capacity_per_hour": null,
+      "requires_all": [],
+      "requires_any": [],
+      "description": "Fictional bank that holds every cluster firm's account (book transfers)."
+    }
+  ],
+  "routes": [
+    {
+      "id": "gamma_collect",
+      "name": "PSP Gamma → Cluster Bank",
+      "path": [
+        "psp_gamma",
+        "core_cluster"
+      ],
+      "description": ""
+    },
+    {
+      "id": "ebank",
+      "name": "Cluster Bank e-banking",
+      "path": [
+        "ebank_cluster",
+        "core_cluster"
+      ],
+      "description": ""
+    },
+    {
+      "id": "h2h",
+      "name": "Host-to-host link → Cluster Bank",
+      "path": [
+        "h2h_cluster",
+        "core_cluster"
+      ],
+      "description": ""
+    }
+  ],
+  "participants": [
+    {
+      "id": "birch",
+      "name": "Birch Assembly Works",
+      "sector": "Final assembly; landlord of the estate",
+      "initial_balance": 200000,
+      "description": ""
+    },
+    {
+      "id": "alder",
+      "name": "Alder Precision Parts",
+      "sector": "Machining",
+      "initial_balance": 300000,
+      "description": ""
+    },
+    {
+      "id": "garnet",
+      "name": "Garnet Metals",
+      "sector": "Metal stockholding",
+      "initial_balance": 400000,
+      "description": ""
+    },
+    {
+      "id": "fallow",
+      "name": "Fallow Freight",
+      "sector": "Logistics",
+      "initial_balance": 200000,
+      "description": ""
+    },
+    {
+      "id": "ember",
+      "name": "Ember Toolroom",
+      "sector": "Tooling",
+      "initial_balance": 100000,
+      "description": ""
+    },
+    {
+      "id": "dunlin",
+      "name": "Dunlin Mouldings",
+      "sector": "Plastic mouldings",
+      "initial_balance": 300000,
+      "description": ""
+    },
+    {
+      "id": "heron",
+      "name": "Heron Harnesses",
+      "sector": "Electrical subassemblies",
+      "initial_balance": 250000,
+      "description": ""
+    },
+    {
+      "id": "cobalt",
+      "name": "Cobalt Finishing",
+      "sector": "Surface finishing",
+      "initial_balance": 300000,
+      "description": ""
+    }
+  ],
+  "external_parties": [
+    {
+      "id": "ext_oem",
+      "name": "Vehicle maker",
+      "description": "Large customer of Birch outside the region."
+    },
+    {
+      "id": "ext_wholesale",
+      "name": "Spare-parts wholesaler",
+      "description": "Customer of Heron and Alder."
+    },
+    {
+      "id": "ext_employees",
+      "name": "Employees",
+      "description": "Payroll recipients."
+    },
+    {
+      "id": "ext_tax",
+      "name": "Tax authority",
+      "description": "Tax payments."
+    },
+    {
+      "id": "ext_mill",
+      "name": "Steel mill",
+      "description": "Outside supplier of Garnet Metals."
+    },
+    {
+      "id": "ext_energy",
+      "name": "Energy supplier",
+      "description": "Electricity and gas for the estate."
+    }
+  ],
+  "obligations": [
+    {
+      "id": "CB001",
+      "payer": "ext_wholesale",
+      "recipient": "heron",
+      "amount": 300000,
+      "due_hour": 9,
+      "priority": 3,
+      "routes": [
+        "gamma_collect"
+      ],
+      "purpose": "spare parts"
+    },
+    {
+      "id": "CB002",
+      "payer": "garnet",
+      "recipient": "ext_mill",
+      "amount": 300000,
+      "due_hour": 10,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "steel"
+    },
+    {
+      "id": "CB003",
+      "payer": "alder",
+      "recipient": "garnet",
+      "amount": 200000,
+      "due_hour": 11,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "bar stock"
+    },
+    {
+      "id": "CB004",
+      "payer": "ext_wholesale",
+      "recipient": "alder",
+      "amount": 250000,
+      "due_hour": 12,
+      "priority": 3,
+      "routes": [
+        "gamma_collect"
+      ],
+      "purpose": "spare parts"
+    },
+    {
+      "id": "CB005",
+      "payer": "fallow",
+      "recipient": "ext_energy",
+      "amount": 80000,
+      "due_hour": 13,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "fuel"
+    },
+    {
+      "id": "CB006",
+      "payer": "dunlin",
+      "recipient": "ext_energy",
+      "amount": 90000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "energy"
+    },
+    {
+      "id": "CB007",
+      "payer": "cobalt",
+      "recipient": "ext_energy",
+      "amount": 60000,
+      "due_hour": 15,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "energy"
+    },
+    {
+      "id": "CB008",
+      "payer": "ember",
+      "recipient": "garnet",
+      "amount": 70000,
+      "due_hour": 16,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "tool steel"
+    },
+    {
+      "id": "CB009",
+      "payer": "ext_oem",
+      "recipient": "birch",
+      "amount": 5200000,
+      "due_hour": 33,
+      "priority": 2,
+      "routes": [
+        "gamma_collect"
+      ],
+      "purpose": "vehicle modules"
+    },
+    {
+      "id": "CB010",
+      "payer": "ext_wholesale",
+      "recipient": "garnet",
+      "amount": 900000,
+      "due_hour": 33,
+      "priority": 3,
+      "routes": [
+        "gamma_collect"
+      ],
+      "purpose": "scrap metal"
+    },
+    {
+      "id": "CB011",
+      "payer": "ext_wholesale",
+      "recipient": "heron",
+      "amount": 400000,
+      "due_hour": 33,
+      "priority": 3,
+      "routes": [
+        "gamma_collect"
+      ],
+      "purpose": "spare parts"
+    },
+    {
+      "id": "CB012",
+      "payer": "alder",
+      "recipient": "garnet",
+      "amount": 1200000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "bar stock"
+    },
+    {
+      "id": "CB013",
+      "payer": "birch",
+      "recipient": "alder",
+      "amount": 1400000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "machined parts"
+    },
+    {
+      "id": "CB014",
+      "payer": "birch",
+      "recipient": "cobalt",
+      "amount": 600000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "coating"
+    },
+    {
+      "id": "CB015",
+      "payer": "birch",
+      "recipient": "dunlin",
+      "amount": 800000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "moulded housings"
+    },
+    {
+      "id": "CB016",
+      "payer": "birch",
+      "recipient": "ember",
+      "amount": 300000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "fixtures"
+    },
+    {
+      "id": "CB017",
+      "payer": "birch",
+      "recipient": "fallow",
+      "amount": 500000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "freight"
+    },
+    {
+      "id": "CB018",
+      "payer": "birch",
+      "recipient": "garnet",
+      "amount": 400000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "sheet metal"
+    },
+    {
+      "id": "CB019",
+      "payer": "birch",
+      "recipient": "heron",
+      "amount": 900000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "wiring harnesses"
+    },
+    {
+      "id": "CB020",
+      "payer": "cobalt",
+      "recipient": "alder",
+      "amount": 1200000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "machined fixtures"
+    },
+    {
+      "id": "CB021",
+      "payer": "dunlin",
+      "recipient": "heron",
+      "amount": 1100000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "connector housings"
+    },
+    {
+      "id": "CB022",
+      "payer": "ember",
+      "recipient": "dunlin",
+      "amount": 900000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "mould inserts"
+    },
+    {
+      "id": "CB023",
+      "payer": "fallow",
+      "recipient": "ember",
+      "amount": 1000000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "fleet tooling"
+    },
+    {
+      "id": "CB024",
+      "payer": "garnet",
+      "recipient": "fallow",
+      "amount": 1300000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "deliveries"
+    },
+    {
+      "id": "CB025",
+      "payer": "heron",
+      "recipient": "cobalt",
+      "amount": 1000000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "cable-gland coating"
+    },
+    {
+      "id": "CB026",
+      "payer": "alder",
+      "recipient": "birch",
+      "amount": 300000,
+      "due_hour": 35,
+      "priority": 2,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "unit rent"
+    },
+    {
+      "id": "CB027",
+      "payer": "cobalt",
+      "recipient": "birch",
+      "amount": 200000,
+      "due_hour": 35,
+      "priority": 2,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "unit rent"
+    },
+    {
+      "id": "CB028",
+      "payer": "dunlin",
+      "recipient": "birch",
+      "amount": 250000,
+      "due_hour": 35,
+      "priority": 2,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "unit rent"
+    },
+    {
+      "id": "CB029",
+      "payer": "ember",
+      "recipient": "birch",
+      "amount": 150000,
+      "due_hour": 35,
+      "priority": 2,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "unit rent"
+    },
+    {
+      "id": "CB030",
+      "payer": "fallow",
+      "recipient": "birch",
+      "amount": 200000,
+      "due_hour": 35,
+      "priority": 2,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "yard rent"
+    },
+    {
+      "id": "CB031",
+      "payer": "garnet",
+      "recipient": "birch",
+      "amount": 300000,
+      "due_hour": 35,
+      "priority": 2,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "unit rent"
+    },
+    {
+      "id": "CB032",
+      "payer": "heron",
+      "recipient": "birch",
+      "amount": 250000,
+      "due_hour": 35,
+      "priority": 2,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "unit rent"
+    },
+    {
+      "id": "CB033",
+      "payer": "birch",
+      "recipient": "ext_tax",
+      "amount": 500000,
+      "due_hour": 36,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "tax"
+    },
+    {
+      "id": "CB034",
+      "payer": "garnet",
+      "recipient": "ext_tax",
+      "amount": 200000,
+      "due_hour": 36,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "tax"
+    },
+    {
+      "id": "CB035",
+      "payer": "garnet",
+      "recipient": "ext_mill",
+      "amount": 600000,
+      "due_hour": 38,
+      "priority": 2,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "steel"
+    },
+    {
+      "id": "CB036",
+      "payer": "alder",
+      "recipient": "ext_employees",
+      "amount": 500000,
+      "due_hour": 40,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "CB037",
+      "payer": "birch",
+      "recipient": "ext_employees",
+      "amount": 1200000,
+      "due_hour": 40,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "CB038",
+      "payer": "cobalt",
+      "recipient": "ext_employees",
+      "amount": 250000,
+      "due_hour": 40,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "CB039",
+      "payer": "dunlin",
+      "recipient": "ext_employees",
+      "amount": 350000,
+      "due_hour": 40,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "CB040",
+      "payer": "ember",
+      "recipient": "ext_employees",
+      "amount": 200000,
+      "due_hour": 40,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "CB041",
+      "payer": "fallow",
+      "recipient": "ext_employees",
+      "amount": 300000,
+      "due_hour": 40,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "CB042",
+      "payer": "garnet",
+      "recipient": "ext_employees",
+      "amount": 300000,
+      "due_hour": 40,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "CB043",
+      "payer": "heron",
+      "recipient": "ext_employees",
+      "amount": 400000,
+      "due_hour": 40,
+      "priority": 1,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "CB044",
+      "payer": "birch",
+      "recipient": "ext_energy",
+      "amount": 150000,
+      "due_hour": 41,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "energy"
+    },
+    {
+      "id": "CB045",
+      "payer": "garnet",
+      "recipient": "ext_energy",
+      "amount": 60000,
+      "due_hour": 41,
+      "priority": 3,
+      "routes": [
+        "ebank"
+      ],
+      "purpose": "energy"
+    }
+  ],
+  "disruptions": [
+    {
+      "id": "D1",
+      "service": "cloud_east",
+      "start_hour": 32,
+      "duration_hours": 12,
+      "severity_pct": 100,
+      "recovery_hours": 0,
+      "recovery_capacity_pct": 50,
+      "description": "Illustrative 12-hour outage of the East Cloud region, day 1 08:00-20:00."
+    }
+  ],
+  "interventions": [],
+  "candidate_interventions": [
+    {
+      "type": "backup_route",
+      "id": "backup_h2h",
+      "primary_routes": [
+        "gamma_collect"
+      ],
+      "backup_route": "h2h",
+      "active_from_hour": 35,
+      "payers": null,
+      "description": "Contingency arrangement: customers may pay through the host-to-host link 3 h after the outage starts."
+    },
+    {
+      "type": "liquidity_buffer",
+      "id": "buffer_birch",
+      "allocations": [
+        {
+          "participant": "birch",
+          "amount": 2000000
+        }
+      ],
+      "funding_hour": 0,
+      "funder": "External liquidity provider (outside the accounting boundary)",
+      "description": "Pre-positioned buffer: EUR 20,000 for Birch Assembly Works at hour 0."
+    },
+    {
+      "type": "faster_recovery",
+      "id": "faster_recovery",
+      "disruption": "D1",
+      "duration_reduction_hours": 6,
+      "description": "Improved recovery runbooks: the outage lasts 6 h less."
+    },
+    {
+      "type": "offsetting",
+      "id": "offsetting",
+      "active_from_hour": 0,
+      "operator": "Payment system operator (clearing account outside the accounting boundary)",
+      "description": "Cluster Bank runs multilateral offsetting of queued payments every hour."
+    },
+    {
+      "type": "priority_reserve",
+      "id": "reserve_payroll",
+      "participants": null,
+      "protected_priority": 1,
+      "lookahead_hours": 24,
+      "active_from_hour": 0,
+      "description": "Every firm holds back routine payments to keep cash for payroll and tax due within 24 h."
+    }
+  ],
+  "settings": {
+    "ordering": "priority_due_id",
+    "liquidity_recycling": "within_step"
+  }
+}

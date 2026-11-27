@@ -1,0 +1,21 @@
+scenario,participant,name,own_urgent_value_hours_no_rule,own_urgent_value_hours_alone,own_urgent_value_hours_everyone,own_urgent_delayed_no_rule,own_urgent_delayed_alone,own_urgent_delayed_everyone,network_value_hours_no_rule,network_value_hours_alone,network_value_hours_everyone
+cluster,birch,Birch Assembly Works,8800000,4800000,8800000,2,1,2,208150000,222550000,233190000
+cluster,alder,Alder Precision Parts,2000000,2000000,2000000,1,1,1,208150000,218350000,233190000
+cluster,garnet,Garnet Metals,2800000,1200000,1200000,2,1,1,208150000,216930000,233190000
+cluster,fallow,Fallow Freight,0,0,1200000,0,0,1,208150000,208150000,233190000
+cluster,ember,Ember Toolroom,800000,0,800000,1,0,1,208150000,216200000,233190000
+cluster,dunlin,Dunlin Mouldings,1400000,1400000,1400000,1,1,1,208150000,208150000,233190000
+cluster,heron,Heron Harnesses,1600000,0,0,1,0,0,208150000,216300000,233190000
+cluster,cobalt,Cobalt Finishing,0,0,1000000,0,0,1,208150000,208150000,233190000
+supply_chain,granite,Granite Wholesale,0,0,0,0,0,0,185500000,185500000,319040000
+supply_chain,meridian,Meridian Distribution,0,0,0,0,0,0,185500000,291750000,319040000
+supply_chain,larkspur,Larkspur Grocers,0,0,0,0,0,0,185500000,185500000,319040000
+supply_chain,oakridge,Oakridge Dairy,7000000,0,7000000,1,0,1,185500000,182700000,319040000
+supply_chain,silverfern,Silverfern Bakery,6000000,0,0,1,0,0,185500000,188900000,319040000
+supply_chain,thistle,Thistle Mill,4500000,4500000,14400000,1,1,1,185500000,190750000,319040000
+supply_chain,copperleaf,Copperleaf Farms,6000000,6000000,19200000,1,1,1,185500000,192100000,319040000
+supply_chain,harrow,Harrow Packaging,0,0,2500000,0,0,1,185500000,185500000,319040000
+supply_chain,swiftlane,Swiftlane Logistics,0,0,0,0,0,0,185500000,185500000,319040000
+supply_chain,brightwater,Brightwater Cafés,0,0,0,0,0,0,185500000,185500000,319040000
+supply_chain,kestrel,Kestrel Facilities,0,0,0,0,0,0,185500000,185500000,319040000
+supply_chain,bluefin,Bluefin IT Services,0,0,0,0,0,0,185500000,185500000,319040000

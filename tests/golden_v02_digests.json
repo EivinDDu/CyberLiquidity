@@ -1,0 +1,8 @@
+{
+  "default_stress+credit+buffer+backup": "bfd0ca3b2c0bfbb6f9251722da1deb70c5568dbe6d27a191441a320a653439d8",
+  "default_stress+credit_all_h0": "9bb7d268d5f2f65742806fd3bff9341ffda877c9d52da3c132cac3c8b9574325",
+  "default_stress+credit_all_h33": "9e152cc66d56e2dd7d71b1ccb26f74fa7ebee08addd70e50e1226832a651fa48",
+  "default_stress+credit_producers_next_step": "600a6334dbdfa45bddcd32ff77e65016bbd79ec6bd8fd2a48a2737968dce68de",
+  "three_stress+credit_B": "5d84a4326c60478a286b690309f4995cf6d6b83c8b86d459f70f9c8c6568eb82",
+  "three_stress+credit_B_small": "9e6328396f594fd6b7391613c1722bdcf857c22dc9c2aebca9182abb21e2a558"
+}

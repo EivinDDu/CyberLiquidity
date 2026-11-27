@@ -1,0 +1,1972 @@
+{
+  "schema_version": "1.0",
+  "id": "default-72h",
+  "name": "Illustrative regional supply chain, 72 hours",
+  "description": "Twelve fictional businesses, two payment service providers, two settlement banks, a high-value channel, two cloud regions and a shared identity provider. Synthetic and uncalibrated; constructed so that both direct operational blockage and financial propagation can occur.",
+  "synthetic": true,
+  "disclaimer": "Synthetic scenario. Results are conditional on model assumptions and are not forecasts of real incidents.",
+  "currency": {
+    "code": "EUR",
+    "minor_units": 2
+  },
+  "horizon_hours": 72,
+  "services": [
+    {
+      "id": "cloud_nimbus",
+      "name": "Nimbus Cloud",
+      "kind": "cloud",
+      "capacity_per_hour": null,
+      "requires_all": [],
+      "requires_any": [],
+      "description": "Fictional public-cloud region. Hosts PSP Alpha."
+    },
+    {
+      "id": "cloud_stratus",
+      "name": "Stratus Cloud",
+      "kind": "cloud",
+      "capacity_per_hour": null,
+      "requires_all": [],
+      "requires_any": [],
+      "description": "Fictional public-cloud region. Hosts PSP Beta."
+    },
+    {
+      "id": "idp_keygate",
+      "name": "KeyGate Identity",
+      "kind": "identity",
+      "capacity_per_hour": null,
+      "requires_all": [],
+      "requires_any": [
+        [
+          "cloud_nimbus",
+          "cloud_stratus"
+        ]
+      ],
+      "description": "Fictional identity/SSO provider replicated in both cloud regions; survives the loss of one region."
+    },
+    {
+      "id": "psp_alpha",
+      "name": "PSP Alpha",
+      "kind": "payment_provider",
+      "capacity_per_hour": 10,
+      "requires_all": [
+        "cloud_nimbus",
+        "idp_keygate"
+      ],
+      "requires_any": [],
+      "description": "Fictional payment service provider used by the three larger businesses."
+    },
+    {
+      "id": "psp_beta",
+      "name": "PSP Beta",
+      "kind": "payment_provider",
+      "capacity_per_hour": 12,
+      "requires_all": [
+        "cloud_stratus",
+        "idp_keygate"
+      ],
+      "requires_any": [],
+      "description": "Fictional payment service provider used by the nine smaller businesses."
+    },
+    {
+      "id": "portal_north",
+      "name": "North High-Value Channel",
+      "kind": "channel",
+      "capacity_per_hour": 6,
+      "requires_all": [
+        "idp_keygate"
+      ],
+      "requires_any": [],
+      "description": "Settlement Bank North's on-premises high-value payment channel (uses KeyGate for sign-on)."
+    },
+    {
+      "id": "settle_north",
+      "name": "Settlement Bank North",
+      "kind": "settlement",
+      "capacity_per_hour": 40,
+      "requires_all": [],
+      "requires_any": [],
+      "description": "Fictional settlement institution for PSP Alpha and the high-value channel."
+    },
+    {
+      "id": "settle_south",
+      "name": "Settlement Bank South",
+      "kind": "settlement",
+      "capacity_per_hour": 40,
+      "requires_all": [],
+      "requires_any": [],
+      "description": "Fictional settlement institution for PSP Beta."
+    }
+  ],
+  "routes": [
+    {
+      "id": "alpha_north",
+      "name": "PSP Alpha → Settlement Bank North",
+      "path": [
+        "psp_alpha",
+        "settle_north"
+      ],
+      "description": ""
+    },
+    {
+      "id": "beta_south",
+      "name": "PSP Beta → Settlement Bank South",
+      "path": [
+        "psp_beta",
+        "settle_south"
+      ],
+      "description": ""
+    },
+    {
+      "id": "hv_north",
+      "name": "North High-Value Channel → Settlement Bank North",
+      "path": [
+        "portal_north",
+        "settle_north"
+      ],
+      "description": ""
+    }
+  ],
+  "participants": [
+    {
+      "id": "granite",
+      "name": "Granite Wholesale",
+      "sector": "Wholesale distribution",
+      "initial_balance": 14000000,
+      "description": ""
+    },
+    {
+      "id": "meridian",
+      "name": "Meridian Distribution",
+      "sector": "Wholesale distribution",
+      "initial_balance": 1200000,
+      "description": ""
+    },
+    {
+      "id": "larkspur",
+      "name": "Larkspur Grocers",
+      "sector": "Retail",
+      "initial_balance": 9000000,
+      "description": ""
+    },
+    {
+      "id": "oakridge",
+      "name": "Oakridge Dairy",
+      "sector": "Dairy",
+      "initial_balance": 400000,
+      "description": ""
+    },
+    {
+      "id": "silverfern",
+      "name": "Silverfern Bakery",
+      "sector": "Bakery",
+      "initial_balance": 1000000,
+      "description": ""
+    },
+    {
+      "id": "thistle",
+      "name": "Thistle Mill",
+      "sector": "Flour milling",
+      "initial_balance": 850000,
+      "description": ""
+    },
+    {
+      "id": "copperleaf",
+      "name": "Copperleaf Farms",
+      "sector": "Agriculture",
+      "initial_balance": 300000,
+      "description": ""
+    },
+    {
+      "id": "harrow",
+      "name": "Harrow Packaging",
+      "sector": "Manufacturing",
+      "initial_balance": 400000,
+      "description": ""
+    },
+    {
+      "id": "swiftlane",
+      "name": "Swiftlane Logistics",
+      "sector": "Logistics",
+      "initial_balance": 400000,
+      "description": ""
+    },
+    {
+      "id": "brightwater",
+      "name": "Brightwater Cafés",
+      "sector": "Hospitality",
+      "initial_balance": 900000,
+      "description": ""
+    },
+    {
+      "id": "kestrel",
+      "name": "Kestrel Facilities",
+      "sector": "Property services",
+      "initial_balance": 1000000,
+      "description": ""
+    },
+    {
+      "id": "bluefin",
+      "name": "Bluefin IT Services",
+      "sector": "IT services",
+      "initial_balance": 700000,
+      "description": ""
+    }
+  ],
+  "external_parties": [
+    {
+      "id": "ext_households",
+      "name": "Card-paying households",
+      "description": "Retail customers; card settlements."
+    },
+    {
+      "id": "ext_agency",
+      "name": "Regional Food Agency",
+      "description": "Public-sector customer of Meridian (outside the boundary)."
+    },
+    {
+      "id": "ext_export",
+      "name": "Export customers",
+      "description": "Foreign buyers of Granite Wholesale."
+    },
+    {
+      "id": "ext_employees",
+      "name": "Employees",
+      "description": "Payroll recipients."
+    },
+    {
+      "id": "ext_tax",
+      "name": "Tax authority",
+      "description": "Tax payments."
+    },
+    {
+      "id": "ext_suppliers",
+      "name": "Outside suppliers",
+      "description": "Raw materials, fuel, maintenance, subscriptions."
+    },
+    {
+      "id": "ext_lender",
+      "name": "Lender",
+      "description": "Loan repayments."
+    }
+  ],
+  "obligations": [
+    {
+      "id": "OB0001",
+      "payer": "ext_agency",
+      "recipient": "meridian",
+      "amount": 2400000,
+      "due_hour": 7,
+      "priority": 2,
+      "routes": [
+        "hv_north"
+      ],
+      "purpose": "contract payment"
+    },
+    {
+      "id": "OB0002",
+      "payer": "granite",
+      "recipient": "copperleaf",
+      "amount": 300000,
+      "due_hour": 8,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "produce invoice"
+    },
+    {
+      "id": "OB0003",
+      "payer": "granite",
+      "recipient": "oakridge",
+      "amount": 1400000,
+      "due_hour": 8,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "dairy invoice"
+    },
+    {
+      "id": "OB0004",
+      "payer": "meridian",
+      "recipient": "silverfern",
+      "amount": 2200000,
+      "due_hour": 8,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "bakery invoice"
+    },
+    {
+      "id": "OB0005",
+      "payer": "bluefin",
+      "recipient": "kestrel",
+      "amount": 200000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0006",
+      "payer": "brightwater",
+      "recipient": "kestrel",
+      "amount": 200000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0007",
+      "payer": "copperleaf",
+      "recipient": "kestrel",
+      "amount": 200000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0008",
+      "payer": "granite",
+      "recipient": "kestrel",
+      "amount": 800000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0009",
+      "payer": "harrow",
+      "recipient": "kestrel",
+      "amount": 200000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0010",
+      "payer": "larkspur",
+      "recipient": "granite",
+      "amount": 1800000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "supplier invoice"
+    },
+    {
+      "id": "OB0011",
+      "payer": "larkspur",
+      "recipient": "kestrel",
+      "amount": 800000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0012",
+      "payer": "meridian",
+      "recipient": "kestrel",
+      "amount": 800000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0013",
+      "payer": "oakridge",
+      "recipient": "kestrel",
+      "amount": 200000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0014",
+      "payer": "silverfern",
+      "recipient": "kestrel",
+      "amount": 200000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0015",
+      "payer": "silverfern",
+      "recipient": "oakridge",
+      "amount": 300000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "milk invoice"
+    },
+    {
+      "id": "OB0016",
+      "payer": "silverfern",
+      "recipient": "thistle",
+      "amount": 1400000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "flour invoice"
+    },
+    {
+      "id": "OB0017",
+      "payer": "swiftlane",
+      "recipient": "kestrel",
+      "amount": 200000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0018",
+      "payer": "thistle",
+      "recipient": "kestrel",
+      "amount": 200000,
+      "due_hour": 9,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "rent"
+    },
+    {
+      "id": "OB0019",
+      "payer": "thistle",
+      "recipient": "copperleaf",
+      "amount": 900000,
+      "due_hour": 10,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "grain invoice"
+    },
+    {
+      "id": "OB0020",
+      "payer": "ext_export",
+      "recipient": "granite",
+      "amount": 3000000,
+      "due_hour": 10,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "export receipt"
+    },
+    {
+      "id": "OB0021",
+      "payer": "brightwater",
+      "recipient": "meridian",
+      "amount": 300000,
+      "due_hour": 11,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "supplier invoice"
+    },
+    {
+      "id": "OB0022",
+      "payer": "brightwater",
+      "recipient": "silverfern",
+      "amount": 200000,
+      "due_hour": 11,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "bakery invoice"
+    },
+    {
+      "id": "OB0023",
+      "payer": "copperleaf",
+      "recipient": "ext_suppliers",
+      "amount": 300000,
+      "due_hour": 11,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "seed and fuel"
+    },
+    {
+      "id": "OB0024",
+      "payer": "oakridge",
+      "recipient": "ext_suppliers",
+      "amount": 400000,
+      "due_hour": 11,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "animal feed"
+    },
+    {
+      "id": "OB0025",
+      "payer": "silverfern",
+      "recipient": "ext_suppliers",
+      "amount": 200000,
+      "due_hour": 11,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "energy"
+    },
+    {
+      "id": "OB0026",
+      "payer": "thistle",
+      "recipient": "ext_suppliers",
+      "amount": 150000,
+      "due_hour": 11,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "energy"
+    },
+    {
+      "id": "OB0027",
+      "payer": "copperleaf",
+      "recipient": "harrow",
+      "amount": 100000,
+      "due_hour": 12,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0028",
+      "payer": "ext_households",
+      "recipient": "brightwater",
+      "amount": 400000,
+      "due_hour": 12,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0029",
+      "payer": "ext_households",
+      "recipient": "larkspur",
+      "amount": 2000000,
+      "due_hour": 12,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0030",
+      "payer": "oakridge",
+      "recipient": "harrow",
+      "amount": 150000,
+      "due_hour": 12,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0031",
+      "payer": "silverfern",
+      "recipient": "harrow",
+      "amount": 150000,
+      "due_hour": 12,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0032",
+      "payer": "thistle",
+      "recipient": "harrow",
+      "amount": 100000,
+      "due_hour": 12,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0033",
+      "payer": "larkspur",
+      "recipient": "meridian",
+      "amount": 400000,
+      "due_hour": 13,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "supplier invoice"
+    },
+    {
+      "id": "OB0034",
+      "payer": "harrow",
+      "recipient": "ext_suppliers",
+      "amount": 250000,
+      "due_hour": 13,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "materials"
+    },
+    {
+      "id": "OB0035",
+      "payer": "brightwater",
+      "recipient": "swiftlane",
+      "amount": 80000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0036",
+      "payer": "copperleaf",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0037",
+      "payer": "granite",
+      "recipient": "swiftlane",
+      "amount": 400000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0038",
+      "payer": "harrow",
+      "recipient": "swiftlane",
+      "amount": 80000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0039",
+      "payer": "larkspur",
+      "recipient": "swiftlane",
+      "amount": 400000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0040",
+      "payer": "meridian",
+      "recipient": "swiftlane",
+      "amount": 300000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0041",
+      "payer": "oakridge",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0042",
+      "payer": "silverfern",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0043",
+      "payer": "thistle",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 14,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0044",
+      "payer": "swiftlane",
+      "recipient": "ext_suppliers",
+      "amount": 250000,
+      "due_hour": 16,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "fuel"
+    },
+    {
+      "id": "OB0045",
+      "payer": "ext_households",
+      "recipient": "brightwater",
+      "amount": 500000,
+      "due_hour": 18,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0046",
+      "payer": "ext_households",
+      "recipient": "larkspur",
+      "amount": 2500000,
+      "due_hour": 18,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0047",
+      "payer": "ext_agency",
+      "recipient": "meridian",
+      "amount": 2400000,
+      "due_hour": 31,
+      "priority": 2,
+      "routes": [
+        "hv_north"
+      ],
+      "purpose": "contract payment"
+    },
+    {
+      "id": "OB0048",
+      "payer": "granite",
+      "recipient": "copperleaf",
+      "amount": 300000,
+      "due_hour": 32,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "produce invoice"
+    },
+    {
+      "id": "OB0049",
+      "payer": "granite",
+      "recipient": "oakridge",
+      "amount": 1400000,
+      "due_hour": 32,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "dairy invoice"
+    },
+    {
+      "id": "OB0050",
+      "payer": "meridian",
+      "recipient": "silverfern",
+      "amount": 2200000,
+      "due_hour": 32,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "bakery invoice"
+    },
+    {
+      "id": "OB0051",
+      "payer": "larkspur",
+      "recipient": "granite",
+      "amount": 1800000,
+      "due_hour": 33,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "supplier invoice"
+    },
+    {
+      "id": "OB0052",
+      "payer": "silverfern",
+      "recipient": "oakridge",
+      "amount": 300000,
+      "due_hour": 33,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "milk invoice"
+    },
+    {
+      "id": "OB0053",
+      "payer": "silverfern",
+      "recipient": "thistle",
+      "amount": 1400000,
+      "due_hour": 33,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "flour invoice"
+    },
+    {
+      "id": "OB0054",
+      "payer": "bluefin",
+      "recipient": "ext_suppliers",
+      "amount": 300000,
+      "due_hour": 33,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "cloud subscription"
+    },
+    {
+      "id": "OB0055",
+      "payer": "thistle",
+      "recipient": "copperleaf",
+      "amount": 900000,
+      "due_hour": 34,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "grain invoice"
+    },
+    {
+      "id": "OB0056",
+      "payer": "ext_export",
+      "recipient": "granite",
+      "amount": 3000000,
+      "due_hour": 34,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "export receipt"
+    },
+    {
+      "id": "OB0057",
+      "payer": "brightwater",
+      "recipient": "meridian",
+      "amount": 300000,
+      "due_hour": 35,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "supplier invoice"
+    },
+    {
+      "id": "OB0058",
+      "payer": "brightwater",
+      "recipient": "silverfern",
+      "amount": 200000,
+      "due_hour": 35,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "bakery invoice"
+    },
+    {
+      "id": "OB0059",
+      "payer": "copperleaf",
+      "recipient": "ext_suppliers",
+      "amount": 300000,
+      "due_hour": 35,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "seed and fuel"
+    },
+    {
+      "id": "OB0060",
+      "payer": "kestrel",
+      "recipient": "ext_suppliers",
+      "amount": 600000,
+      "due_hour": 35,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "maintenance"
+    },
+    {
+      "id": "OB0061",
+      "payer": "oakridge",
+      "recipient": "ext_suppliers",
+      "amount": 400000,
+      "due_hour": 35,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "animal feed"
+    },
+    {
+      "id": "OB0062",
+      "payer": "silverfern",
+      "recipient": "ext_suppliers",
+      "amount": 200000,
+      "due_hour": 35,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "energy"
+    },
+    {
+      "id": "OB0063",
+      "payer": "thistle",
+      "recipient": "ext_suppliers",
+      "amount": 150000,
+      "due_hour": 35,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "energy"
+    },
+    {
+      "id": "OB0064",
+      "payer": "copperleaf",
+      "recipient": "harrow",
+      "amount": 100000,
+      "due_hour": 36,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0065",
+      "payer": "ext_households",
+      "recipient": "brightwater",
+      "amount": 400000,
+      "due_hour": 36,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0066",
+      "payer": "ext_households",
+      "recipient": "larkspur",
+      "amount": 2000000,
+      "due_hour": 36,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0067",
+      "payer": "oakridge",
+      "recipient": "harrow",
+      "amount": 150000,
+      "due_hour": 36,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0068",
+      "payer": "silverfern",
+      "recipient": "harrow",
+      "amount": 150000,
+      "due_hour": 36,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0069",
+      "payer": "thistle",
+      "recipient": "harrow",
+      "amount": 100000,
+      "due_hour": 36,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0070",
+      "payer": "larkspur",
+      "recipient": "meridian",
+      "amount": 400000,
+      "due_hour": 37,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "supplier invoice"
+    },
+    {
+      "id": "OB0071",
+      "payer": "harrow",
+      "recipient": "ext_suppliers",
+      "amount": 250000,
+      "due_hour": 37,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "materials"
+    },
+    {
+      "id": "OB0072",
+      "payer": "brightwater",
+      "recipient": "swiftlane",
+      "amount": 80000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0073",
+      "payer": "copperleaf",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0074",
+      "payer": "granite",
+      "recipient": "bluefin",
+      "amount": 500000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "IT services"
+    },
+    {
+      "id": "OB0075",
+      "payer": "granite",
+      "recipient": "swiftlane",
+      "amount": 400000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0076",
+      "payer": "harrow",
+      "recipient": "swiftlane",
+      "amount": 80000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0077",
+      "payer": "kestrel",
+      "recipient": "bluefin",
+      "amount": 100000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "IT services"
+    },
+    {
+      "id": "OB0078",
+      "payer": "larkspur",
+      "recipient": "bluefin",
+      "amount": 500000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "IT services"
+    },
+    {
+      "id": "OB0079",
+      "payer": "larkspur",
+      "recipient": "swiftlane",
+      "amount": 400000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0080",
+      "payer": "meridian",
+      "recipient": "bluefin",
+      "amount": 200000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "IT services"
+    },
+    {
+      "id": "OB0081",
+      "payer": "meridian",
+      "recipient": "swiftlane",
+      "amount": 300000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0082",
+      "payer": "oakridge",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0083",
+      "payer": "silverfern",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0084",
+      "payer": "swiftlane",
+      "recipient": "bluefin",
+      "amount": 150000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "IT services"
+    },
+    {
+      "id": "OB0085",
+      "payer": "thistle",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 38,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0086",
+      "payer": "copperleaf",
+      "recipient": "ext_employees",
+      "amount": 1200000,
+      "due_hour": 39,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0087",
+      "payer": "harrow",
+      "recipient": "ext_employees",
+      "amount": 500000,
+      "due_hour": 39,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0088",
+      "payer": "oakridge",
+      "recipient": "ext_employees",
+      "amount": 1400000,
+      "due_hour": 39,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0089",
+      "payer": "silverfern",
+      "recipient": "ext_employees",
+      "amount": 1200000,
+      "due_hour": 39,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0090",
+      "payer": "thistle",
+      "recipient": "ext_employees",
+      "amount": 900000,
+      "due_hour": 39,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0091",
+      "payer": "swiftlane",
+      "recipient": "ext_employees",
+      "amount": 1400000,
+      "due_hour": 40,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0092",
+      "payer": "swiftlane",
+      "recipient": "ext_suppliers",
+      "amount": 250000,
+      "due_hour": 40,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "fuel"
+    },
+    {
+      "id": "OB0093",
+      "payer": "ext_households",
+      "recipient": "brightwater",
+      "amount": 500000,
+      "due_hour": 42,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0094",
+      "payer": "ext_households",
+      "recipient": "larkspur",
+      "amount": 2500000,
+      "due_hour": 42,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0095",
+      "payer": "ext_agency",
+      "recipient": "meridian",
+      "amount": 2400000,
+      "due_hour": 55,
+      "priority": 2,
+      "routes": [
+        "hv_north"
+      ],
+      "purpose": "contract payment"
+    },
+    {
+      "id": "OB0096",
+      "payer": "granite",
+      "recipient": "copperleaf",
+      "amount": 300000,
+      "due_hour": 56,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "produce invoice"
+    },
+    {
+      "id": "OB0097",
+      "payer": "granite",
+      "recipient": "oakridge",
+      "amount": 1400000,
+      "due_hour": 56,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "dairy invoice"
+    },
+    {
+      "id": "OB0098",
+      "payer": "meridian",
+      "recipient": "silverfern",
+      "amount": 2200000,
+      "due_hour": 56,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "bakery invoice"
+    },
+    {
+      "id": "OB0099",
+      "payer": "granite",
+      "recipient": "ext_employees",
+      "amount": 4000000,
+      "due_hour": 57,
+      "priority": 1,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0100",
+      "payer": "larkspur",
+      "recipient": "ext_employees",
+      "amount": 3000000,
+      "due_hour": 57,
+      "priority": 1,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0101",
+      "payer": "larkspur",
+      "recipient": "granite",
+      "amount": 1800000,
+      "due_hour": 57,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "supplier invoice"
+    },
+    {
+      "id": "OB0102",
+      "payer": "silverfern",
+      "recipient": "oakridge",
+      "amount": 300000,
+      "due_hour": 57,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "milk invoice"
+    },
+    {
+      "id": "OB0103",
+      "payer": "silverfern",
+      "recipient": "thistle",
+      "amount": 1400000,
+      "due_hour": 57,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "flour invoice"
+    },
+    {
+      "id": "OB0104",
+      "payer": "kestrel",
+      "recipient": "ext_lender",
+      "amount": 2000000,
+      "due_hour": 58,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "loan repayment"
+    },
+    {
+      "id": "OB0105",
+      "payer": "thistle",
+      "recipient": "copperleaf",
+      "amount": 900000,
+      "due_hour": 58,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "grain invoice"
+    },
+    {
+      "id": "OB0106",
+      "payer": "ext_export",
+      "recipient": "granite",
+      "amount": 3000000,
+      "due_hour": 58,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "export receipt"
+    },
+    {
+      "id": "OB0107",
+      "payer": "brightwater",
+      "recipient": "meridian",
+      "amount": 300000,
+      "due_hour": 59,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "supplier invoice"
+    },
+    {
+      "id": "OB0108",
+      "payer": "brightwater",
+      "recipient": "silverfern",
+      "amount": 200000,
+      "due_hour": 59,
+      "priority": 2,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "bakery invoice"
+    },
+    {
+      "id": "OB0109",
+      "payer": "copperleaf",
+      "recipient": "ext_suppliers",
+      "amount": 300000,
+      "due_hour": 59,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "seed and fuel"
+    },
+    {
+      "id": "OB0110",
+      "payer": "oakridge",
+      "recipient": "ext_suppliers",
+      "amount": 400000,
+      "due_hour": 59,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "animal feed"
+    },
+    {
+      "id": "OB0111",
+      "payer": "silverfern",
+      "recipient": "ext_suppliers",
+      "amount": 200000,
+      "due_hour": 59,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "energy"
+    },
+    {
+      "id": "OB0112",
+      "payer": "thistle",
+      "recipient": "ext_suppliers",
+      "amount": 150000,
+      "due_hour": 59,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "energy"
+    },
+    {
+      "id": "OB0113",
+      "payer": "granite",
+      "recipient": "ext_tax",
+      "amount": 1000000,
+      "due_hour": 60,
+      "priority": 1,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "tax"
+    },
+    {
+      "id": "OB0114",
+      "payer": "larkspur",
+      "recipient": "ext_tax",
+      "amount": 1000000,
+      "due_hour": 60,
+      "priority": 1,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "tax"
+    },
+    {
+      "id": "OB0115",
+      "payer": "copperleaf",
+      "recipient": "harrow",
+      "amount": 100000,
+      "due_hour": 60,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0116",
+      "payer": "ext_households",
+      "recipient": "brightwater",
+      "amount": 400000,
+      "due_hour": 60,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0117",
+      "payer": "ext_households",
+      "recipient": "larkspur",
+      "amount": 2000000,
+      "due_hour": 60,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0118",
+      "payer": "oakridge",
+      "recipient": "harrow",
+      "amount": 150000,
+      "due_hour": 60,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0119",
+      "payer": "silverfern",
+      "recipient": "harrow",
+      "amount": 150000,
+      "due_hour": 60,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0120",
+      "payer": "thistle",
+      "recipient": "harrow",
+      "amount": 100000,
+      "due_hour": 60,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "packaging"
+    },
+    {
+      "id": "OB0121",
+      "payer": "meridian",
+      "recipient": "ext_employees",
+      "amount": 2000000,
+      "due_hour": 61,
+      "priority": 1,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0122",
+      "payer": "larkspur",
+      "recipient": "meridian",
+      "amount": 400000,
+      "due_hour": 61,
+      "priority": 2,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "supplier invoice"
+    },
+    {
+      "id": "OB0123",
+      "payer": "harrow",
+      "recipient": "ext_suppliers",
+      "amount": 250000,
+      "due_hour": 61,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "materials"
+    },
+    {
+      "id": "OB0124",
+      "payer": "brightwater",
+      "recipient": "swiftlane",
+      "amount": 80000,
+      "due_hour": 62,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0125",
+      "payer": "copperleaf",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 62,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0126",
+      "payer": "granite",
+      "recipient": "swiftlane",
+      "amount": 400000,
+      "due_hour": 62,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0127",
+      "payer": "harrow",
+      "recipient": "swiftlane",
+      "amount": 80000,
+      "due_hour": 62,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0128",
+      "payer": "larkspur",
+      "recipient": "swiftlane",
+      "amount": 400000,
+      "due_hour": 62,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0129",
+      "payer": "meridian",
+      "recipient": "swiftlane",
+      "amount": 300000,
+      "due_hour": 62,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0130",
+      "payer": "oakridge",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 62,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0131",
+      "payer": "silverfern",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 62,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0132",
+      "payer": "thistle",
+      "recipient": "swiftlane",
+      "amount": 100000,
+      "due_hour": 62,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "logistics fee"
+    },
+    {
+      "id": "OB0133",
+      "payer": "bluefin",
+      "recipient": "ext_employees",
+      "amount": 1200000,
+      "due_hour": 63,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0134",
+      "payer": "brightwater",
+      "recipient": "ext_employees",
+      "amount": 600000,
+      "due_hour": 63,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0135",
+      "payer": "kestrel",
+      "recipient": "ext_employees",
+      "amount": 600000,
+      "due_hour": 63,
+      "priority": 1,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "payroll"
+    },
+    {
+      "id": "OB0136",
+      "payer": "swiftlane",
+      "recipient": "ext_suppliers",
+      "amount": 250000,
+      "due_hour": 64,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "fuel"
+    },
+    {
+      "id": "OB0137",
+      "payer": "ext_households",
+      "recipient": "brightwater",
+      "amount": 500000,
+      "due_hour": 66,
+      "priority": 3,
+      "routes": [
+        "beta_south"
+      ],
+      "purpose": "card settlement"
+    },
+    {
+      "id": "OB0138",
+      "payer": "ext_households",
+      "recipient": "larkspur",
+      "amount": 2500000,
+      "due_hour": 66,
+      "priority": 3,
+      "routes": [
+        "alpha_north"
+      ],
+      "purpose": "card settlement"
+    }
+  ],
+  "disruptions": [
+    {
+      "id": "D1",
+      "service": "cloud_nimbus",
+      "start_hour": 32,
+      "duration_hours": 12,
+      "severity_pct": 100,
+      "recovery_hours": 0,
+      "recovery_capacity_pct": 50,
+      "description": "Illustrative 12-hour outage of the Nimbus Cloud region, day 1 08:00-20:00."
+    }
+  ],
+  "interventions": [],
+  "candidate_interventions": [
+    {
+      "type": "backup_route",
+      "id": "backup_beta",
+      "primary_routes": [
+        "alpha_north"
+      ],
+      "backup_route": "beta_south",
+      "active_from_hour": 35,
+      "payers": null,
+      "description": "Contingency arrangement: Alpha's clients may route through PSP Beta 3 h after the outage starts."
+    },
+    {
+      "type": "liquidity_buffer",
+      "id": "buffer_producers",
+      "allocations": [
+        {
+          "participant": "oakridge",
+          "amount": 1000000
+        },
+        {
+          "participant": "silverfern",
+          "amount": 1000000
+        },
+        {
+          "participant": "thistle",
+          "amount": 1000000
+        },
+        {
+          "participant": "copperleaf",
+          "amount": 1000000
+        }
+      ],
+      "funding_hour": 0,
+      "funder": "External liquidity provider (outside the accounting boundary)",
+      "description": "Pre-positioned buffer: EUR 10,000 for each of the four producers at hour 0."
+    },
+    {
+      "type": "faster_recovery",
+      "id": "faster_recovery",
+      "disruption": "D1",
+      "duration_reduction_hours": 6,
+      "description": "Improved recovery runbooks: the outage lasts 6 h less."
+    }
+  ],
+  "settings": {
+    "ordering": "priority_due_id",
+    "liquidity_recycling": "within_step"
+  }
+}

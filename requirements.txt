@@ -1,0 +1,8 @@
+# Direct dependencies, pinned to the versions the test suite was run with
+# (Python 3.13.7, macOS). Full transitive pins: requirements-lock.txt
+pydantic==2.14.4
+streamlit==1.67.0
+plotly==7.2.0
+pandas==3.1.1
+matplotlib==3.11.2
+pytest==9.2.0

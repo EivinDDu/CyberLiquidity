@@ -1,0 +1,25 @@
+case,duration_h,backup_pct,buffer_pct,together_pct,independent_pct,excess_pp,verdict
+stratus_outage,2,0.0,0.0,0.0,0.0,0.0,roughly independent
+stratus_outage,4,53.0,0.0,53.0,53.0,0.0,roughly independent
+stratus_outage,6,79.5,0.0,79.5,79.5,0.0,roughly independent
+stratus_outage,8,88.1,0.4,88.1,88.2,-0.1,roughly independent
+stratus_outage,12,94.7,0.2,94.7,94.7,-0.0,roughly independent
+stratus_outage,16,96.6,0.1,96.6,96.6,-0.0,roughly independent
+stratus_outage,24,98.0,0.1,98.0,98.0,-0.0,roughly independent
+stratus_outage,36,99.0,3.1,99.0,99.1,-0.0,roughly independent
+hv_channel_outage,2,0.0,31.4,31.4,31.4,0.0,roughly independent
+hv_channel_outage,4,34.7,51.8,63.8,68.5,-4.7,overlapping
+hv_channel_outage,6,61.4,57.3,78.6,83.5,-4.9,overlapping
+hv_channel_outage,8,72.6,59.6,84.8,88.9,-4.1,overlapping
+hv_channel_outage,12,85.3,67.4,91.8,95.2,-3.4,overlapping
+hv_channel_outage,16,89.9,70.3,94.4,97.0,-2.6,overlapping
+hv_channel_outage,24,93.8,72.7,96.6,98.3,-1.7,overlapping
+hv_channel_outage,36,96.9,64.0,98.3,98.9,-0.6,roughly independent
+idp_outage,2,0.0,0.0,0.0,0.0,0.0,roughly independent
+idp_outage,4,0.0,0.0,0.0,0.0,0.0,roughly independent
+idp_outage,6,0.0,0.0,0.0,0.0,0.0,roughly independent
+idp_outage,8,0.0,0.2,0.2,0.2,0.0,roughly independent
+idp_outage,12,0.0,0.1,0.1,0.1,0.0,roughly independent
+idp_outage,16,0.0,0.1,0.1,0.1,0.0,roughly independent
+idp_outage,24,0.0,0.0,0.0,0.0,0.0,roughly independent
+idp_outage,36,0.0,0.1,0.1,0.1,0.0,roughly independent
