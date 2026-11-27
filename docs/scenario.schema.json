@@ -60,6 +60,7 @@
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -153,11 +154,13 @@
         },
         "provider": {
           "default": "Credit provider (outside the accounting boundary)",
+          "maxLength": 120,
           "title": "Provider",
           "type": "string"
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -244,6 +247,7 @@
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -269,11 +273,14 @@
           "type": "string"
         },
         "name": {
+          "maxLength": 120,
+          "minLength": 1,
           "title": "Name",
           "type": "string"
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -316,6 +323,7 @@
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -361,11 +369,13 @@
         },
         "funder": {
           "default": "External liquidity provider (outside the accounting boundary)",
+          "maxLength": 120,
           "title": "Funder",
           "type": "string"
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -435,6 +445,7 @@
         },
         "purpose": {
           "default": "",
+          "maxLength": 120,
           "title": "Purpose",
           "type": "string"
         }
@@ -475,11 +486,13 @@
         },
         "operator": {
           "default": "Payment system operator (clearing account outside the accounting boundary)",
+          "maxLength": 120,
           "title": "Operator",
           "type": "string"
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -502,11 +515,14 @@
           "type": "string"
         },
         "name": {
+          "maxLength": 120,
+          "minLength": 1,
           "title": "Name",
           "type": "string"
         },
         "sector": {
           "default": "",
+          "maxLength": 120,
           "title": "Sector",
           "type": "string"
         },
@@ -518,6 +534,7 @@
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -588,6 +605,7 @@
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -610,6 +628,8 @@
           "type": "string"
         },
         "name": {
+          "maxLength": 120,
+          "minLength": 1,
           "title": "Name",
           "type": "string"
         },
@@ -626,6 +646,7 @@
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -650,6 +671,8 @@
           "type": "string"
         },
         "name": {
+          "maxLength": 120,
+          "minLength": 1,
           "title": "Name",
           "type": "string"
         },
@@ -697,6 +720,7 @@
         },
         "description": {
           "default": "",
+          "maxLength": 4000,
           "title": "Description",
           "type": "string"
         }
@@ -765,11 +789,14 @@
       "type": "string"
     },
     "name": {
+      "maxLength": 120,
+      "minLength": 1,
       "title": "Name",
       "type": "string"
     },
     "description": {
       "default": "",
+      "maxLength": 4000,
       "title": "Description",
       "type": "string"
     },
@@ -780,6 +807,7 @@
     },
     "disclaimer": {
       "default": "Synthetic scenario. Results are conditional on model assumptions and are not forecasts of real incidents.",
+      "maxLength": 4000,
       "title": "Disclaimer",
       "type": "string"
     },

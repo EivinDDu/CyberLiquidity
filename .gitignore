@@ -9,3 +9,5 @@ dist/
 # Ad-hoc run exports (the experiment's committed outputs live in experiments/output/)
 runs/
 .ruff_cache/
+.hypothesis/
+.benchmarks/

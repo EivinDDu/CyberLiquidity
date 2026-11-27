@@ -32,6 +32,7 @@ from .metrics import (
     summarize,
 )
 from .models import DISCLAIMER, Scenario
+from .safety import safe_cell
 
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)  # deterministic archives
 
@@ -55,13 +56,15 @@ def scenario_digest(scenario: Scenario) -> str:
 
 
 def rows_to_csv(rows: list[dict[str, Any]]) -> str:
+    """CSV text for a list of rows. Text cells that a spreadsheet would run as a formula are neutralised
+    (``safety.safe_cell``), so an exported table is safe to open in Excel, LibreOffice or Google Sheets."""
     buffer = io.StringIO()
     if not rows:
         return ""
     writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()), lineterminator="\n")
     writer.writeheader()
     for row in rows:
-        writer.writerow({k: ("" if v is None else v) for k, v in row.items()})
+        writer.writerow({k: ("" if v is None else safe_cell(v)) for k, v in row.items()})
     return buffer.getvalue()
 
 

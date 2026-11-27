@@ -1,8 +1,8 @@
 # CyberLiquidity model note
 
-**Engine version 0.2.0.** This note gives the rules, equations, assumptions, limitations and metric definitions behind every number the application shows. The code is in `src/cyberliquidity/`, and the tests in `tests/` check the rules stated here.
+**Engine version 0.4.0.** This note gives the rules, equations, assumptions, limitations and metric definitions behind every number the application shows. The code is in `src/cyberliquidity/`, and the tests in `tests/` check the rules stated here.
 
-Version 0.2 adds committed credit lines (7.4), the exact liquidity backstop (7.5), combinations of interventions (7.6), contagion generations (6.5) and the stress-lab analyses (6.6). Every rule of version 0.1 is unchanged: for scenarios that use only 0.1 features, the 0.2 engine reproduces the 0.1 events and ledger byte for byte, which a regression test checks against recorded 0.1 digests.
+Version 0.4 changes no rule: it is faster and gives exactly the 0.3 results (a regression test checks recorded 0.3 digests), and the backstop stops hopeless trial runs early (7.5, step 5). Version 0.3 added multilateral offsetting (7.8), the priority reserve (7.9) and the robustness check (7.10). Version 0.2 adds committed credit lines (7.4), the exact liquidity backstop (7.5), combinations of interventions (7.6), contagion generations (6.5) and the stress-lab analyses (6.6). Every rule of version 0.1 is unchanged: for scenarios that use only 0.1 features, the 0.2 engine reproduces the 0.1 events and ledger byte for byte, which a regression test checks against recorded 0.1 digests.
 
 > **Synthetic scenario. Results are conditional on model assumptions and are not forecasts of real incidents.**
 
@@ -249,6 +249,13 @@ Question: how much hour-0 pre-funding does each participant need so that every p
 2. **Sufficiency of the peaks.** Pre-funding each participant with its peak draw *P* reproduces that outcome exactly. At every check where the credit run settled a payment, the post-payment position was at least *−P*, so *n + P ≥ A*. A payment the credit run did not settle at a check failed for a route reason, which is unchanged. By induction the two runs settle the same payments in the same order. A cash flag can remain only on hours in which the payment's route was unusable anyway.
 3. **Tightness.** With `next_step` recycling, one minor unit less for a participant makes the payment at its peak infeasible at that check. The payer cannot gain usable cash later in the same hour, so a cash block is recorded. With `within_step` recycling the peak can exceed the need: a pre-funded payer can sometimes wait for money arriving later in the same hour, whereas a credit line is drawn the moment the payment is reached in the queue.
 4. **Refinement.** Each amount is therefore lowered by binary search, largest first, keeping the outcome identical to the unlimited-liquidity run with no payment of a covered participant held up by cash alone. The search repeats until nothing changes (at most three passes). Every final amount is then re-checked: one minor unit less must change the outcome.
+
+5. **Stopping hopeless trials early (0.4).** Each trial in steps 2 to 4 asks only whether an allocation reproduces the unlimited-liquidity run with no covered payment held up by cash alone. A trial is therefore stopped at the end of the first hour in which it certainly cannot:
+   - a payment settles in a different hour than in the unlimited-liquidity run;
+   - a payment that run settled in this hour is still queued;
+   - a covered participant's payment is blocked by cash alone.
+
+   Each of these makes the final comparison fail, so stopping returns the verdict a full run would. An allocation that was already tried is not run again. Neither shortcut changes which allocations are tried or the result. The reported run count includes every trial started, and `runs_stopped_early` says how many stopped before the horizon.
 
 The result is **locally smallest**: no single participant's amount can be lowered by one minor unit. Another allocation with a smaller total may exist, because outcomes need not be monotone in the amounts. Every claim in the verdict is backed by a simulation run in the same computation, and the number of runs is reported. This is the liquidity the *model* needs in *one* scenario, not an estimate of real liquidity needs and not a recommendation.
 

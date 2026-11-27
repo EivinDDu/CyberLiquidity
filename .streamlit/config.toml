@@ -1,7 +1,85 @@
+# CyberLiquidity app configuration (read automatically by `streamlit run` from the repository root).
+
 [browser]
 # Local research tool: do not send usage statistics to Streamlit.
 gatherUsageStats = false
 
 [server]
-# Bind to this machine only.
+# Bind to this machine only; the app is not meant to be reachable from other computers.
 address = "localhost"
+# Scenario uploads are small JSON files; refuse anything larger than 5 MB before it is read.
+maxUploadSize = 5
+maxMessageSize = 50
+# Cross-site request forgery protection and same-origin checks (Streamlit defaults, stated explicitly).
+enableXsrfProtection = true
+enableCORS = true
+# Serves app/static (the self-hosted Inter typeface and the logo), so the app needs no internet connection.
+enableStaticServing = true
+runOnSave = false
+
+[client]
+# Hide developer controls (deploy, clear cache); the menu keeps the theme switcher (System, Light, Dark),
+# Print, Record screen and About.
+toolbarMode = "viewer"
+# Unexpected errors show a short message in the browser; the full details go to the terminal only.
+showErrorDetails = "type"
+
+[runner]
+# Only st.* calls draw on the page.
+magicEnabled = false
+
+[theme]
+font = "Inter, sans-serif"
+headingFont = "Inter, sans-serif"
+headingFontWeights = [700, 650, 600, 600, 600, 600]
+# A calmer scale than the default: page title, section, sub-section.
+headingFontSizes = ["2.1rem", "1.6rem", "1.25rem", "1.1rem", "1rem", "0.9rem"]
+baseRadius = "0.55rem"
+buttonRadius = "0.55rem"
+showWidgetBorder = true
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/InterVariable.woff2"
+weight = "100 900"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/InterVariable-Italic.woff2"
+weight = "100 900"
+style = "italic"
+
+# Colours: the chart surfaces the data palette was validated against (white / #191919), a deep blue
+# accent with 7:1 contrast on white, and in dark mode a lighter blue with 5:1 contrast on the background.
+[theme.light]
+primaryColor = "#1757ac"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f2f4f7"
+textColor = "#191919"
+linkColor = "#1757ac"
+borderColor = "#d5dbe3"
+dataframeBorderColor = "#e3e7ed"
+codeBackgroundColor = "#f2f4f7"
+chartCategoricalColors = ["#257de0", "#f47230", "#00b894", "#f2a600", "#ee7fac", "#008a17", "#6a4ce2"]
+
+[theme.light.sidebar]
+backgroundColor = "#f6f8fb"
+secondaryBackgroundColor = "#ffffff"
+borderColor = "#d5dbe3"
+
+[theme.dark]
+primaryColor = "#338ced"
+backgroundColor = "#191919"
+secondaryBackgroundColor = "#242424"
+textColor = "#efefef"
+linkColor = "#6aabf1"
+borderColor = "#3d3d3d"
+dataframeBorderColor = "#333333"
+codeBackgroundColor = "#242424"
+chartCategoricalColors = ["#338ced", "#e76624", "#00a888", "#d28e05", "#e24d8b", "#0aac23", "#9887ef"]
+
+[theme.dark.sidebar]
+backgroundColor = "#141414"
+secondaryBackgroundColor = "#202020"
+borderColor = "#333333"

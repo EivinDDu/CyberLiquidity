@@ -89,7 +89,7 @@ def build_report(comparison: Comparison, runs: dict[str, RunView], abc: Sequence
     parts: list[str] = []
 
     parts.append(f"<h1>CyberLiquidity briefing · {html.escape(s.name)}</h1>")
-    parts.append(f'<p class="sub">Generated {_dt.datetime.now(_dt.timezone.utc):%Y-%m-%d %H:%M} UTC · engine {ENGINE_VERSION} · '
+    parts.append(f'<p class="sub">Generated {_dt.datetime.now(_dt.UTC):%Y-%m-%d %H:%M} UTC · engine {ENGINE_VERSION} · '
                  f"scenario digest <code>{scenario_digest(s)[:16]}…</code></p>")
     parts.append(f'<div class="banner"><strong>{html.escape(DISCLAIMER)}</strong> All organisations and data are fictional. '
                  "Overdue value is not economic loss, and a temporary cash shortfall is not insolvency.</div>")

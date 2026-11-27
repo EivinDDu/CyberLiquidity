@@ -82,7 +82,7 @@ STATUS_ICON = {"available": "✓", "degraded": "⚠", "unavailable": "✕"}
 # Contagion kinds reuse the blocking-category colours: direct = operational, propagated = cash awaiting inflows.
 KIND_CATEGORY = {"direct": "operational_only", "propagated": "cash_awaiting_inflows", "unlinked": "cash_other"}
 
-FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif"
+FONT = "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif"
 
 
 def palette_for(theme_type: str | None) -> Palette:

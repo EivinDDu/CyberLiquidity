@@ -68,6 +68,19 @@ class OperationalModel:
         self._by_service: dict[str, list[Disruption]] = defaultdict(list)
         for d in self.disruptions:
             self._by_service[d.service].append(d)
+        # status_at(hour) depends only on which disruption phases are active in that hour, so
+        # it is computed once per distinct set of active phases (most hours share "none").
+        self._status_cache: dict[tuple, dict[str, ServiceStatus]] = {}
+
+    def _phase_signature(self, hour: int | None) -> tuple:
+        if hour is None:
+            return ()
+        active = []
+        for index, d in enumerate(self.disruptions):
+            phase = d.phase_at(hour)
+            if phase is not None:
+                active.append((index, phase))
+        return tuple(active)
 
     # ------------------------------------------------------------------ state
 
@@ -91,7 +104,18 @@ class OperationalModel:
 
         ``hour=None`` ignores disruptions (normal operation). ``overrides`` forces the
         *own* capacity percentage of given services, for hypothetical failure analysis.
+        Without overrides the returned mapping is cached and shared by every hour with the
+        same active disruption phases: treat it as read-only.
         """
+        if overrides:
+            return self._evaluate(hour, overrides)
+        signature = self._phase_signature(hour)
+        cached = self._status_cache.get(signature)
+        if cached is None:
+            cached = self._status_cache[signature] = self._evaluate(hour, None)
+        return cached
+
+    def _evaluate(self, hour: int | None, overrides: Mapping[str, int] | None) -> dict[str, ServiceStatus]:
         out: dict[str, ServiceStatus] = {}
         for sid in self.order:
             if overrides and sid in overrides:

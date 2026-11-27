@@ -1,10 +1,10 @@
 {
   "experiment": "gridlock_and_hoarding",
-  "engine_version": "0.3.0",
+  "engine_version": "0.4.0",
   "environment": {
     "python": "3.13.7",
-    "engine_version": "0.3.0",
-    "cyberliquidity": "0.1.0",
+    "engine_version": "0.4.0",
+    "cyberliquidity": "0.4.0",
     "pydantic": "2.14.4",
     "streamlit": "1.67.0",
     "plotly": "7.2.0",

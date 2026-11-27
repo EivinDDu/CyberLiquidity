@@ -23,12 +23,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from .engine import OPERATIONAL_REASONS, SimulationResult, Status, simulate
+from .engine import OPERATIONAL_REASONS, BlockRecord, SimulationResult, Status, simulate, simulate_until
 from .metrics import summarize
 from .models import (
     BufferAllocation,
     CreditLineIntervention,
     LiquidityBufferIntervention,
+    Obligation,
     PriorityReserveIntervention,
     Scenario,
 )
@@ -151,8 +152,9 @@ class BackstopResult:
     not_tight: tuple[str, ...]
     route_limited_count: int  # still delayed with unlimited liquidity: liquidity cannot fix these
     route_limited_value: int
-    runs_used: int
+    runs_used: int  # simulation runs started (a repeated trial reuses its earlier run)
     recycling: str = "within_step"
+    runs_stopped_early: int = 0  # trial runs abandoned once their outcome could no longer match
 
     @property
     def total_peak(self) -> int:
@@ -215,6 +217,13 @@ def liquidity_backstop(stressed: Scenario, participants: Sequence[str] | None = 
     3. With ``refine``, each amount is lowered by binary search, keeping the outcome
        identical, and every final amount is re-checked: one minor unit less must change
        the outcome. The result is locally smallest, not necessarily the smallest total.
+
+    Each trial asks only "does this allocation reproduce the credit run?", so a trial run
+    is abandoned at the end of the first hour in which the answer is certainly no: a
+    payment settles in a different hour than in the credit run, a payment the credit run
+    settled in that hour is still queued, or a covered participant is blocked by cash
+    alone. A trial whose allocation was already tried reuses that answer. Neither changes
+    which allocations are tried or the result; both only save simulation time.
     """
     if any(isinstance(iv, CreditLineIntervention) for iv in stressed.interventions):
         raise ValueError("the backstop diagnostic needs a scenario without an applied credit line")
@@ -241,14 +250,33 @@ def liquidity_backstop(stressed: Scenario, participants: Sequence[str] | None = 
     peaks = {p: v for p, v in credit_run.credit_peak.items() if v > 0}
     covered = set(limits)
     target = {k: (o.status, o.settled_hour) for k, o in credit_run.outcomes.items()}
+    target_hour = {k: o.settled_hour for k, o in credit_run.outcomes.items()}
+    stopped = 0
+    tried: dict[tuple[tuple[str, int], ...], bool] = {}
+
+    def cannot_match(hour: int, settled: list[Obligation], blocked: list[BlockRecord]) -> bool:
+        # Each condition makes the final comparison below fail, so stopping here is exact.
+        if any(target_hour[ob.id] != hour for ob in settled):
+            return True
+        return any(target_hour[b.obligation_id] == hour or (b.cash and not b.operational and b.payer in covered)
+                   for b in blocked)
 
     def sufficient(amounts: dict[str, int]) -> bool:
-        nonlocal runs
+        nonlocal runs, stopped
+        key = tuple(sorted((p, a) for p, a in amounts.items() if a > 0))  # zero amounts fund nothing
+        if key in tried:
+            return tried[key]
         runs += 1
-        result = simulate(_allocation_scenario(stressed, amounts, "backstop_prefunding"))
-        if any((o.status, o.settled_hour) != target[k] for k, o in result.outcomes.items()):
-            return False
-        return not any(b.cash and not b.operational and b.payer in covered for b in result.blocks)
+        result = simulate_until(_allocation_scenario(stressed, amounts, "backstop_prefunding"), cannot_match)
+        if result is None:
+            stopped += 1
+            ok = False
+        elif any((o.status, o.settled_hour) != target[k] for k, o in result.outcomes.items()):
+            ok = False
+        else:
+            ok = not any(b.cash and not b.operational and b.payer in covered for b in result.blocks)
+        tried[key] = ok
+        return ok
 
     allocation = dict(peaks)
     verified = sufficient(allocation) if peaks else True
@@ -313,4 +341,5 @@ def liquidity_backstop(stressed: Scenario, participants: Sequence[str] | None = 
         route_limited_value=sum(o.amount for o in still),
         runs_used=runs,
         recycling=recycling,
+        runs_stopped_early=stopped,
     )

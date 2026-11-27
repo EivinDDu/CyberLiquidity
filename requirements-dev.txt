@@ -1,0 +1,6 @@
+# Development and CI tools, pinned to the versions the checks were run with (Python 3.13.7, macOS).
+# Install on top of requirements.txt:  python -m pip install -r requirements.txt -r requirements-dev.txt
+hypothesis==6.170.17
+ruff==0.17.6
+bandit==1.9.4
+pip-audit==2.10.1

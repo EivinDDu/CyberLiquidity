@@ -34,6 +34,8 @@ from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from enum import Enum
+from functools import cached_property
+from operator import attrgetter
 from typing import Any
 
 from .models import (
@@ -49,7 +51,7 @@ from .models import (
 )
 from .operational import OperationalModel, ServiceState, ServiceStatus
 
-ENGINE_VERSION = "0.3.0"
+ENGINE_VERSION = "0.4.0"
 
 
 class InvariantViolation(AssertionError):
@@ -70,6 +72,8 @@ CASH_REASON = Reason.INSUFFICIENT_CASH.value
 
 # Mutually exclusive categories for one obligation in one blocked hour.
 CATEGORIES = ("operational_only", "operational_and_cash", "cash_awaiting_inflows", "cash_other")
+
+_AMOUNT = attrgetter("amount")
 
 
 class Status(str, Enum):
@@ -143,26 +147,28 @@ class BlockRecord:
     available_credit: int | None = None  # undrawn committed credit (only for payers with a facility)
     reserved: int | None = None  # cash kept for protected payments (only for routine payments under a reserve rule)
 
-    @property
+    # Derived values are computed once per record (the record is immutable) and cached on
+    # the instance; they are not dataclass fields, so equality and asdict() are unchanged.
+    @cached_property
     def operational(self) -> bool:
         return any(r in OPERATIONAL_REASONS for r in self.reasons)
 
-    @property
+    @cached_property
     def cash(self) -> bool:
         return CASH_REASON in self.reasons
 
-    @property
+    @cached_property
     def held_by_reserve(self) -> bool:
         """Cash-blocked only because of the reserve rule: without it the payer could have funded the payment."""
         if not self.cash or not self.reserved:
             return False
         return (self.available_cash or 0) + (self.available_credit or 0) >= self.amount
 
-    @property
+    @cached_property
     def overdue_inflow_value(self) -> int:
         return sum(amount for _, amount in self.overdue_inflows)
 
-    @property
+    @cached_property
     def category(self) -> str:
         if self.operational and self.cash:
             return "operational_and_cash"
@@ -419,7 +425,24 @@ def ordering_key(mode: str) -> Callable[[Obligation], tuple]:
 
 def simulate(scenario: Scenario) -> SimulationResult:
     """Run the deterministic hourly simulation for ``scenario``."""
-    return _Run(scenario).run()
+    result = _Run(scenario).run()
+    if result is None:  # only a stop check can abandon a run
+        raise RuntimeError("simulation ended without a result")
+    return result
+
+
+HourCheck = Callable[[int, list[Obligation], list[BlockRecord]], bool]
+
+
+def simulate_until(scenario: Scenario, stop: HourCheck) -> SimulationResult | None:
+    """Run ``scenario``, abandoning it as soon as ``stop(hour, settled, blocked)`` returns True.
+
+    ``stop`` is called at the end of every hour with the obligations settled in that hour
+    and the block records written for it. Returns None if the run was abandoned and
+    otherwise the complete result, identical to ``simulate(scenario)``. Searches that only
+    need to know whether a run reaches a given outcome use it to stop once it cannot.
+    """
+    return _Run(scenario).run(stop)
 
 
 class _Run:
@@ -431,6 +454,13 @@ class _Run:
         self.internal = scenario.internal_ids()
         self.obligations = scenario.obligations_by_id()
         self.paths = {r.id: r.path for r in scenario.routes}
+        # Precomputed for speed (results are unchanged): the services on each route path that
+        # have a throughput limit, and, per hour, whether every service on the path is up.
+        nominal = {svc.id: svc.capacity_per_hour for svc in scenario.services}
+        self.limited_path = {rid: tuple(sid for sid in path if nominal[sid] is not None) for rid, path in self.paths.items()}
+        self.up: dict[str, bool] = {}
+        self._checks: dict[tuple, tuple] = {}  # this hour's route checks per eligible-route tuple (see _route_checks)
+        self._inflow_summary: dict[str, tuple[int, list[list[Any]]]] = {}  # this hour's overdue-inflow data per payer
         self.key = ordering_key(scenario.settings.ordering)
         self.recycle_within_step = scenario.settings.liquidity_recycling == "within_step"
 
@@ -461,6 +491,7 @@ class _Run:
                         key=lambda o: (o.due_hour, o.id))
             for pid, terms in self.reserve.items()
         }
+        self.protected_ids = frozenset(ob.id for obs in self.protected.values() for ob in obs)
         self.reserved: dict[str, int] = {}  # payer -> cash kept for protected payments (rules active this hour)
         # gridlock resolution (multilateral offsetting)
         self.offset = self.c.offsetting
@@ -495,10 +526,10 @@ class _Run:
 
     # ------------------------------------------------------------------ rules
 
-    def _available_cash(self, participant: str, received_this_hour: Counter[str]) -> int:
+    def _available_cash(self, participant: str, received_this_hour: dict[str, int]) -> int:
         balance = self.balances[participant]
         if not self.recycle_within_step:
-            balance -= received_this_hour[participant]
+            balance -= received_this_hour.get(participant, 0)
         return balance
 
     def _available_credit(self, participant: str, hour: int) -> int:
@@ -532,15 +563,13 @@ class _Run:
                    if ob.due_hour < horizon and ob.id not in self.settled_hour)
 
     def _is_protected(self, ob: Obligation) -> bool:
-        terms = self.reserve.get(ob.payer)
-        return terms is not None and ob.priority <= terms.protected_priority
+        return ob.id in self.protected_ids
 
     def _reserved_against(self, ob: Obligation) -> int:
         """Cash a payer keeps back from ``ob`` under its reserve rule (0 for protected payments or no active rule)."""
-        need = self.reserved.get(ob.payer)
-        if need is None or self._is_protected(ob):
+        if ob.id in self.protected_ids:
             return 0
-        return need
+        return self.reserved.get(ob.payer, 0)
 
     def _repay_credit(self, hour: int) -> None:
         for participant in sorted(self.drawn):
@@ -562,15 +591,18 @@ class _Run:
             )
             self._ledger(hour, event_id, "credit_repayment", terms.intervention_id, participant, terms.account, repay)
 
-    def _usable_route(self, ob: Obligation, hour: int, status: dict[str, ServiceStatus], remaining: dict[str, int | None]) -> str | None:
+    def _usable_route(self, ob: Obligation, hour: int, remaining: dict[str, int | None]) -> str | None:
+        """First eligible route that is active, has every service up and capacity left on its limited services.
+
+        ``self.up`` holds this hour's "every service on the path is up" flags. On an up route a
+        service without a throughput limit always has capacity, so only ``limited_path`` is checked.
+        """
+        up = self.up
         for route_id, active_from in self.c.eligible_routes[ob.id]:
-            if hour < active_from:
+            if hour < active_from or not up[route_id]:
                 continue
-            for sid in self.paths[route_id]:
-                if status[sid].pct <= 0:
-                    break
-                left = remaining[sid]
-                if left is not None and left < 1:
+            for sid in self.limited_path[route_id]:
+                if remaining[sid] < 1:
                     break
             else:
                 return route_id
@@ -582,14 +614,14 @@ class _Run:
         return "external_inflow" if ob.recipient in self.internal else "external_outflow"
 
     def _discharge(self, hour: int, ob: Obligation, route_id: str, remaining: dict[str, int | None],
-                   used: Counter[str], batch: int | None = None) -> int:
+                   used: dict[str, int], batch: int | None = None) -> int:
         """Consume capacity, mark ``ob`` settled and record its SETTLEMENT event (cash is moved by the caller)."""
         if ob.id in self.settled_hour:
             raise InvariantViolation(f"obligation {ob.id} would settle twice")
         for sid in self.paths[route_id]:
             if remaining[sid] is not None:
                 remaining[sid] -= 1
-            used[sid] += 1
+            used[sid] = used.get(sid, 0) + 1
         if ob.payer in self.reserved and self._is_protected(ob):
             self.reserved[ob.payer] -= ob.amount
         self.sequence += 1
@@ -615,7 +647,7 @@ class _Run:
         return event_id
 
     def _settle(self, hour: int, ob: Obligation, route_id: str,
-                remaining: dict[str, int | None], used: Counter[str], received: Counter[str]) -> None:
+                remaining: dict[str, int | None], used: dict[str, int], received: dict[str, int]) -> None:
         payer_internal = ob.payer in self.internal
         recipient_internal = ob.recipient in self.internal
         if payer_internal:
@@ -627,7 +659,7 @@ class _Run:
                 raise InvariantViolation(f"negative balance for {ob.payer} after {ob.id}")
         if recipient_internal:
             self.balances[ob.recipient] += ob.amount
-            received[ob.recipient] += ob.amount
+            received[ob.recipient] = received.get(ob.recipient, 0) + ob.amount
         kind = self._flow(ob)
         if kind == "external_inflow":
             self.cum_in += ob.amount
@@ -638,8 +670,8 @@ class _Run:
 
     # ------------------------------------------------------------- offsetting
 
-    def _offsetting_batch(self, hour: int, queue: list[Obligation], status: dict[str, ServiceStatus],
-                          remaining: dict[str, int | None], received: Counter[str]) -> list[tuple[Obligation, str]]:
+    def _offsetting_batch(self, hour: int, queue: list[Obligation], remaining: dict[str, int | None],
+                          received: dict[str, int]) -> list[tuple[Obligation, str]]:
         """The covered set of queued payments that can settle simultaneously (empty if none).
 
         Candidates are queued payments of participants inside the boundary, in queue order.
@@ -648,53 +680,114 @@ class _Run:
         (less, if it pays a routine payment in the set, the reserve it must keep), the last
         payment in queue order of the participant with the largest uncovered amount (ties:
         lowest id) is removed and the assignment repeated.
+
+        Implemented exactly but without needless repetition: when no route check in an
+        assignment failed for lack of capacity, removing a payment frees capacity nobody was
+        waiting for, so the next assignment is the current one without that payment and is
+        not recomputed. Net positions are updated incrementally; only a capacity-bound
+        assignment is rebuilt from scratch. (Available cash and credit do not change while
+        a batch is being searched, because nothing settles.)
         """
-        candidates = [ob for ob in queue if ob.payer in self.internal]
+        internal = self.internal
+        reserved = self.reserved
+        protected_ids = self.protected_ids
+        limited_path = self.limited_path
+        up = self.up
+        eligible = self.c.eligible_routes
+        candidates = [ob for ob in queue if ob.payer in internal]
+        if len(candidates) < 2:
+            return []
+        base_cover = {pid: self._available_cash(pid, received) + self._available_credit(pid, hour) for pid in internal}
         removed: set[str] = set()
-        while True:
+
+        def assign() -> tuple[list[tuple[Obligation, str]], bool]:
             capacity = dict(remaining)
-            assigned: list[tuple[Obligation, str]] = []
+            out: list[tuple[Obligation, str]] = []
+            bound = False  # did a route check fail because payments earlier in this set used the capacity?
             for ob in candidates:
                 if ob.id in removed:
                     continue
-                route_id = self._usable_route(ob, hour, status, capacity)
-                if route_id is None:
+                chosen = None
+                for route_id, active_from in eligible[ob.id]:
+                    if hour < active_from or not up[route_id]:
+                        continue
+                    for sid in limited_path[route_id]:
+                        if capacity[sid] < 1:
+                            # a service already saturated before the set fails whatever is removed
+                            if remaining[sid] >= 1:
+                                bound = True
+                            break
+                    else:
+                        chosen = route_id
+                        break
+                if chosen is None:
                     continue
-                for sid in self.paths[route_id]:
-                    if capacity[sid] is not None:
-                        capacity[sid] -= 1
-                assigned.append((ob, route_id))
+                for sid in limited_path[chosen]:
+                    capacity[sid] -= 1
+                out.append((ob, chosen))
+            return out, bound
+
+        while True:
+            assigned, bound = assign()
             if len(assigned) < 2:  # a single payment would already have settled on its own
                 return []
+            alive = [True] * len(assigned)
+            alive_count = len(assigned)
             net: dict[str, int] = defaultdict(int)
+            appear: Counter[str] = Counter()  # entries in the set naming the participant (as payer or recipient)
             protected_paid: Counter[str] = Counter()
-            routine_payers: set[str] = set()
-            for ob, _ in assigned:
+            routine: Counter[str] = Counter()  # routine payments of payers under an active reserve rule
+            by_payer: dict[str, list[int]] = defaultdict(list)
+            for index, (ob, _) in enumerate(assigned):
                 net[ob.payer] -= ob.amount
-                if ob.recipient in self.internal:
+                appear[ob.payer] += 1
+                by_payer[ob.payer].append(index)
+                if ob.recipient in internal:
                     net[ob.recipient] += ob.amount
-                if ob.payer in self.reserved:
-                    if self._is_protected(ob):
+                    appear[ob.recipient] += 1
+                if ob.payer in reserved:
+                    if ob.id in protected_ids:
                         protected_paid[ob.payer] += ob.amount
                     else:
-                        routine_payers.add(ob.payer)
-            uncovered: dict[str, int] = {}
-            for pid, position in net.items():
-                keep = self.reserved[pid] - protected_paid[pid] if pid in routine_payers else 0
-                cover = self._available_cash(pid, received) + self._available_credit(pid, hour) + position - keep
-                if cover < 0:
-                    uncovered[pid] = -cover
-            if not uncovered:
-                return assigned
-            worst = min(uncovered, key=lambda pid: (-uncovered[pid], pid))
-            last = next(ob for ob, _ in reversed(assigned) if ob.payer == worst)
-            removed.add(last.id)
+                        routine[ob.payer] += 1
+            while True:
+                uncovered: dict[str, int] = {}
+                for pid, position in net.items():
+                    if not appear[pid]:
+                        continue
+                    keep = reserved[pid] - protected_paid[pid] if routine[pid] else 0
+                    cover = base_cover[pid] + position - keep
+                    if cover < 0:
+                        uncovered[pid] = -cover
+                if not uncovered:
+                    return [entry for entry, keep_it in zip(assigned, alive) if keep_it]
+                worst = min(uncovered, key=lambda pid: (-uncovered[pid], pid))
+                index = by_payer[worst].pop()  # the worst participant's last payment in queue order
+                last = assigned[index][0]
+                removed.add(last.id)
+                if bound:
+                    break  # freed capacity can change later assignments: rebuild from scratch
+                alive[index] = False
+                alive_count -= 1
+                if alive_count < 2:
+                    return []
+                net[last.payer] += last.amount
+                appear[last.payer] -= 1
+                if last.recipient in internal:
+                    net[last.recipient] -= last.amount
+                    appear[last.recipient] -= 1
+                if last.payer in reserved:
+                    if last.id in protected_ids:
+                        protected_paid[last.payer] -= last.amount
+                    else:
+                        routine[last.payer] -= 1
 
     def _settle_batch(self, hour: int, batch: list[tuple[Obligation, str]], remaining: dict[str, int | None],
-                      used: Counter[str], received: Counter[str]) -> None:
+                      used: dict[str, int], received: dict[str, int]) -> None:
         """Discharge every obligation in ``batch`` at once; cash moves net through the clearing account."""
         terms = self.offset
-        assert terms is not None
+        if terms is None:  # only reached when an offsetting intervention is active
+            raise InvariantViolation("offsetting batch without an active offsetting intervention")
         self.batches += 1
         number = self.batches
         net: dict[str, int] = defaultdict(int)
@@ -742,17 +835,25 @@ class _Run:
             if net[pid] <= 0:
                 continue
             self.balances[pid] += net[pid]
-            received[pid] += net[pid]
+            received[pid] = received.get(pid, 0) + net[pid]
             self._ledger(hour, event_id, "offset_credit", terms.intervention_id, terms.account, pid, net[pid])
         for ob, route_id in batch:
             self._discharge(hour, ob, route_id, remaining, used, batch=number)
 
-    def _record_block(self, hour: int, ob: Obligation, status: dict[str, ServiceStatus],
-                      remaining: dict[str, int | None], received: Counter[str],
-                      overdue_inflows: dict[str, tuple[tuple[str, int], ...]]) -> BlockRecord:
+    def _route_checks(self, eligible: tuple[tuple[str, int], ...], hour: int, status: dict[str, ServiceStatus],
+                      remaining: dict[str, int | None]) -> tuple[tuple[dict[str, Any], ...], bool, tuple[str, ...]]:
+        """The state of every eligible route at the end of ``hour``: (checks, any route usable, route reasons).
+
+        Blocks are recorded after the hour's last settlement, so the result depends only on
+        the eligible routes; it is computed once per hour for each distinct tuple. The check
+        records are shared read-only by every block that has the same eligible routes.
+        """
+        cached = self._checks.get(eligible)
+        if cached is not None:
+            return cached
         checks: list[dict[str, Any]] = []
         route_ok = False
-        for route_id, active_from in self.c.eligible_routes[ob.id]:
+        for route_id, active_from in eligible:
             if hour < active_from:
                 checks.append({"route": route_id, "status": Reason.ROUTE_NOT_YET_ACTIVE.value, "active_from_hour": active_from})
                 continue
@@ -767,6 +868,15 @@ class _Run:
                 continue
             checks.append({"route": route_id, "status": "AVAILABLE"})
             route_ok = True
+        reasons = () if route_ok else tuple(sorted({c["status"] for c in checks}))
+        cached = (tuple(checks), route_ok, reasons)
+        self._checks[eligible] = cached
+        return cached
+
+    def _record_block(self, hour: int, ob: Obligation, status: dict[str, ServiceStatus],
+                      remaining: dict[str, int | None], received: dict[str, int],
+                      overdue_inflows: dict[str, tuple[tuple[str, int], ...]]) -> BlockRecord:
+        checks, route_ok, route_reasons = self._route_checks(self.c.eligible_routes[ob.id], hour, status, remaining)
 
         balance = available = shortfall = credit = reserved = None
         inflows: tuple[tuple[str, int], ...] = ()
@@ -786,9 +896,7 @@ class _Run:
         if route_ok and cash_ok:
             raise InvariantViolation(f"{ob.id} could settle in hour {hour} but was left in the queue")
 
-        reasons: list[str] = []
-        if not route_ok:
-            reasons.extend(sorted({c["status"] for c in checks}))
+        reasons: list[str] = list(route_reasons)
         if not cash_ok:
             reasons.append(CASH_REASON)
 
@@ -797,7 +905,7 @@ class _Run:
             "recipient": ob.recipient,
             "due_hour": ob.due_hour,
             "reasons": reasons,
-            "route_checks": checks,
+            "route_checks": list(checks),
         }
         if balance is not None:
             data["payer_balance"] = balance
@@ -807,10 +915,14 @@ class _Run:
         if reserved is not None:
             data["payer_reserved_for_priority"] = reserved
         if shortfall is not None:
+            # identical for every cash-blocked payment of this payer in this hour: built once, shared read-only
+            summary = self._inflow_summary.get(ob.payer)
+            if summary is None:
+                summary = self._inflow_summary[ob.payer] = (sum(a for _, a in inflows), [list(x) for x in inflows])
             data["shortfall"] = shortfall
             data["payer_overdue_inflow_count"] = len(inflows)
-            data["payer_overdue_inflow_value"] = sum(a for _, a in inflows)
-            data["payer_overdue_inflows"] = [list(x) for x in inflows]
+            data["payer_overdue_inflow_value"] = summary[0]
+            data["payer_overdue_inflows"] = summary[1]
         event_id = self._event(hour, "BLOCKED", obligation_id=ob.id, amount=ob.amount, data=data)
         record = BlockRecord(
             hour=hour,
@@ -818,7 +930,7 @@ class _Run:
             payer=ob.payer,
             amount=ob.amount,
             reasons=tuple(reasons),
-            route_checks=tuple(checks),
+            route_checks=checks,
             payer_balance=balance,
             available_cash=available,
             shortfall=shortfall,
@@ -827,6 +939,15 @@ class _Run:
             available_credit=credit,
             reserved=reserved,
         )
+        # Fill the cached derived flags from what is already known (same values the
+        # properties compute: route reasons are all operational, cash is the cash flag).
+        operational = bool(route_reasons)
+        cash = not cash_ok
+        if operational:
+            category = "operational_and_cash" if cash else "operational_only"
+        else:
+            category = "cash_awaiting_inflows" if inflows else "cash_other"
+        vars(record).update(operational=operational, cash=cash, category=category)
         self.blocks.append(record)
         self.last_block[ob.id] = record
         return record
@@ -834,7 +955,7 @@ class _Run:
     # ------------------------------------------------------------------- loop
 
     def _settlement_loop(self, hour: int, queue: list[Obligation], status: dict[str, ServiceStatus],
-                         remaining: dict[str, int | None], used: Counter[str], received: Counter[str],
+                         remaining: dict[str, int | None], used: dict[str, int], received: dict[str, int],
                          settled_now: list[Obligation]) -> list[Obligation]:
         """Settle the first feasible obligation in queue order, then "rescan from the top", until none can settle.
 
@@ -851,14 +972,18 @@ class _Run:
         by_payer: dict[str, list[int]] = defaultdict(list)
         for index, ob in enumerate(queue):
             by_payer[ob.payer].append(index)
+        internal = self.internal
+        usable_route = self._usable_route
+        available_cash = self._available_cash
+        available_credit = self._available_credit
+        reserved_against = self._reserved_against
 
         def feasible_route(ob: Obligation) -> str | None:
-            route_id = self._usable_route(ob, hour, status, remaining)
+            route_id = usable_route(ob, hour, remaining)
             if route_id is None:
                 return None
-            if ob.payer in self.internal and (
-                self._available_cash(ob.payer, received) + self._available_credit(ob.payer, hour)
-                - self._reserved_against(ob) < ob.amount
+            if ob.payer in internal and (
+                available_cash(ob.payer, received) + available_credit(ob.payer, hour) - reserved_against(ob) < ob.amount
             ):
                 return None
             return route_id
@@ -884,7 +1009,7 @@ class _Run:
             position = restart if restart is not None else position + 1
         return [ob for ob, keep in zip(queue, alive) if keep]
 
-    def run(self) -> SimulationResult:
+    def run(self, stop: HourCheck | None = None) -> SimulationResult | None:
         due_at: dict[int, list[Obligation]] = defaultdict(list)
         for ob in self.s.obligations:
             due_at[ob.due_hour].append(ob)
@@ -894,12 +1019,15 @@ class _Run:
 
         queue: list[Obligation] = []
         previous: dict[str, tuple] = {}
+        previous_status: dict[str, ServiceStatus] | None = None
 
         for hour in range(self.horizon):
             # 1. operational state and shared capacity for this hour
             status = self.op.status_at(hour)
             self.statuses.append(status)
-            for sid in self.op.order:
+            # status_at returns the same (cached) mapping while the active disruption phases are
+            # unchanged; then no service changed state and there is nothing to record.
+            for sid in (self.op.order if status is not previous_status else ()):
                 st = status[sid]
                 signature = (st.state, st.pct, st.capacity)
                 before = previous.get(sid)
@@ -920,7 +1048,12 @@ class _Run:
                     )
                 previous[sid] = signature
             remaining: dict[str, int | None] = {sid: st.capacity for sid, st in status.items()}
-            used: Counter[str] = Counter()
+            used: dict[str, int] = {}  # services' payments this hour, first-use order
+            if status is not previous_status:
+                self.up = {rid: all(status[sid].pct > 0 for sid in path) for rid, path in self.paths.items()}
+            previous_status = status
+            self._checks = {}
+            self._inflow_summary = {}
 
             # 2. scheduled intervention funding (explicit external inflow)
             for item in funding_at.get(hour, ()):
@@ -948,11 +1081,12 @@ class _Run:
                     data={"payer": ob.payer, "recipient": ob.recipient, "priority": ob.priority,
                           "eligible_routes": [r for r, _ in self.c.eligible_routes[ob.id]]},
                 )
-            queue.extend(newly_due)
-            queue.sort(key=self.key)
+            if newly_due:  # the queue only ever loses entries in between, so it is still in order otherwise
+                queue.extend(newly_due)
+                queue.sort(key=self.key)
 
             # 4. settlement loop (see _settlement_loop), then optional offsetting batches
-            received: Counter[str] = Counter()
+            received: dict[str, int] = {}  # cash received this hour per participant
             settled_now: list[Obligation] = []
             self.sequence = 0
             self.reserved = {pid: self._reserve_need(pid, hour) for pid, terms in self.reserve.items()
@@ -960,7 +1094,7 @@ class _Run:
             queue = self._settlement_loop(hour, queue, status, remaining, used, received, settled_now)
             if self.offset is not None and hour >= self.offset.active_from_hour:
                 while True:
-                    batch = self._offsetting_batch(hour, queue, status, remaining, received)
+                    batch = self._offsetting_batch(hour, queue, remaining, received)
                     if not batch:
                         break
                     self._settle_batch(hour, batch, remaining, used, received)
@@ -988,6 +1122,8 @@ class _Run:
             # 7. snapshot and invariant checks
             self._check_invariants(hour, status, used)
             self.hours.append(self._snapshot(hour, queue, newly_due, settled_now, hour_blocks, used))
+            if stop is not None and stop(hour, settled_now, hour_blocks):
+                return None
 
         for ob in queue:
             last = self.last_block[ob.id]
@@ -1034,7 +1170,7 @@ class _Run:
             offsetting=self.offset,
         )
 
-    def _check_invariants(self, hour: int, status: dict[str, ServiceStatus], used: Counter[str]) -> None:
+    def _check_invariants(self, hour: int, status: dict[str, ServiceStatus], used: dict[str, int]) -> None:
         expected = self.initial_total + self.cum_in - self.cum_out + self.cum_funding + self.cum_draw - self.cum_repay
         actual = sum(self.balances.values())
         if actual != expected:
@@ -1053,33 +1189,35 @@ class _Run:
                 raise InvariantViolation(f"{sid} processed {count} payments with capacity {cap} in hour {hour}")
 
     def _snapshot(self, hour: int, queue: list[Obligation], newly_due: list[Obligation],
-                  settled_now: list[Obligation], hour_blocks: list[BlockRecord], used: Counter[str]) -> HourSnapshot:
+                  settled_now: list[Obligation], hour_blocks: list[BlockRecord], used: dict[str, int]) -> HourSnapshot:
         category_counts = dict.fromkeys(CATEGORIES, 0)
         category_values = dict.fromkeys(CATEGORIES, 0)
-        reason_counts: Counter[str] = Counter()
-        reason_values: Counter[str] = Counter()
+        reason_counts: dict[str, int] = {}  # first-seen order, like a Counter
+        reason_values: dict[str, int] = {}
         for record in hour_blocks:
-            category_counts[record.category] += 1
-            category_values[record.category] += record.amount
+            category = record.category
+            amount = record.amount
+            category_counts[category] += 1
+            category_values[category] += amount
             for reason in record.reasons:
-                reason_counts[reason] += 1
-                reason_values[reason] += record.amount
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+                reason_values[reason] = reason_values.get(reason, 0) + amount
         late = [ob for ob in settled_now if ob.due_hour < hour]
         return HourSnapshot(
             hour=hour,
             balances=dict(self.balances),
             overdue_count=len(queue),
-            overdue_value=sum(ob.amount for ob in queue),
+            overdue_value=sum(map(_AMOUNT, queue)),
             newly_due_count=len(newly_due),
-            newly_due_value=sum(ob.amount for ob in newly_due),
+            newly_due_value=sum(map(_AMOUNT, newly_due)),
             settled_count=len(settled_now),
-            settled_value=sum(ob.amount for ob in settled_now),
+            settled_value=sum(map(_AMOUNT, settled_now)),
             settled_late_count=len(late),
-            settled_late_value=sum(ob.amount for ob in late),
+            settled_late_value=sum(map(_AMOUNT, late)),
             category_counts=category_counts,
             category_values=category_values,
-            reason_counts=dict(reason_counts),
-            reason_values=dict(reason_values),
+            reason_counts=reason_counts,
+            reason_values=reason_values,
             service_used=dict(used),
             cumulative_external_inflow=self.cum_in,
             cumulative_external_outflow=self.cum_out,
@@ -1105,8 +1243,12 @@ class _Run:
                 status, delay, overdue = Status.SETTLED_LATE, settled - ob.due_hour, settled - ob.due_hour
             if len(records) != overdue:
                 raise InvariantViolation(f"{ob.id}: {len(records)} block records for {overdue} overdue hours")
-            reason_hours = Counter(reason for record in records for reason in record.reasons)
-            category_hours = Counter(record.category for record in records)
+            if records:
+                reason_hours = dict(Counter(reason for record in records for reason in record.reasons))
+                counted = Counter(record.category for record in records)
+                category_hours = {c: counted.get(c, 0) for c in CATEGORIES}
+            else:  # never blocked (most obligations): skip building empty counters
+                reason_hours, category_hours = {}, dict.fromkeys(CATEGORIES, 0)
             outcomes[ob.id] = ObligationOutcome(
                 obligation_id=ob.id,
                 payer=ob.payer,
@@ -1122,8 +1264,8 @@ class _Run:
                 route_used=self.route_used.get(ob.id),
                 via_backup=ob.id in self.route_used and self.route_used[ob.id] not in ob.routes,
                 blocked_hours=len(records),
-                reason_hours=dict(reason_hours),
-                category_hours={c: category_hours.get(c, 0) for c in CATEGORIES},
+                reason_hours=reason_hours,
+                category_hours=category_hours,
                 mechanism=_classify(records),
                 first_block_hour=records[0].hour if records else None,
                 final_reasons=records[-1].reasons if records else (),

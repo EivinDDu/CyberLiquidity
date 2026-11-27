@@ -21,11 +21,13 @@ They are coupled only through ``Obligation.routes``.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections import Counter
 from enum import Enum
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from .graphs import find_cycle
 
@@ -37,6 +39,43 @@ DISCLAIMER = (
 _MAX_REPORTED_ERRORS = 40
 
 Id = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:\-]+$")]
+
+# ------------------------------------------------------------------ plain text
+# Names and descriptions come from scenario files that may be shared between people, and
+# they are shown in the app, in reports and in exported tables. They are therefore plain
+# text: no control characters, no invisible or direction-changing characters (which can
+# make one name look like another), and, in short labels, no markup characters or web
+# addresses that a viewer could render as formatting or as a link.
+_MARKUP = re.compile(r"[<>\[\]`\\]|://")
+_HIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn"})  # control, format, surrogate, private, unassigned
+
+
+def _hidden_character(value: str, allowed: str = "") -> str | None:
+    for ch in value:
+        if ch not in allowed and unicodedata.category(ch) in _HIDDEN_CATEGORIES:
+            return f"U+{ord(ch):04X}"
+    return None
+
+
+def _plain_label(value: str) -> str:
+    hidden = _hidden_character(value)
+    if hidden:
+        raise ValueError(f"contains an invisible or control character ({hidden}); use plain text")
+    if _MARKUP.search(value):
+        raise ValueError("contains markup characters (< > [ ] ` \\) or a web address; labels must be plain text")
+    return value
+
+
+def _plain_text(value: str) -> str:
+    hidden = _hidden_character(value, allowed="\n\t")
+    if hidden:
+        raise ValueError(f"contains an invisible or control character ({hidden}); use plain text")
+    return value
+
+
+Label = Annotated[str, Field(max_length=120), AfterValidator(_plain_label)]
+Name = Annotated[str, Field(min_length=1, max_length=120), AfterValidator(_plain_label)]
+Text = Annotated[str, Field(max_length=4000), AfterValidator(_plain_text)]
 
 
 class _Frozen(BaseModel):
@@ -101,7 +140,7 @@ class Service(_Frozen):
     """
 
     id: Id
-    name: str
+    name: Name
     kind: ServiceKind
     capacity_per_hour: int | None = Field(
         default=None,
@@ -110,7 +149,7 @@ class Service(_Frozen):
     )
     requires_all: tuple[Id, ...] = ()
     requires_any: tuple[tuple[Id, ...], ...] = ()
-    description: str = ""
+    description: Text = ""
 
     def dependency_groups(self) -> tuple[tuple[str, ...], ...]:
         """Dependencies in conjunctive form: every group is required, any member of a group suffices."""
@@ -132,9 +171,9 @@ class Route(_Frozen):
     """
 
     id: Id
-    name: str
+    name: Name
     path: tuple[Id, ...] = Field(min_length=1)
-    description: str = ""
+    description: Text = ""
 
 
 # --------------------------------------------------------------- financial network
@@ -144,18 +183,18 @@ class Participant(_Frozen):
     """A funded participant inside the accounting boundary (has a cash account)."""
 
     id: Id
-    name: str
-    sector: str = ""
+    name: Name
+    sector: Label = ""
     initial_balance: int = Field(ge=0, description="Opening cash in minor units.")
-    description: str = ""
+    description: Text = ""
 
 
 class ExternalParty(_Frozen):
     """A counterparty outside the accounting boundary (no modelled cash constraint)."""
 
     id: Id
-    name: str
-    description: str = ""
+    name: Name
+    description: Text = ""
 
 
 class Obligation(_Frozen):
@@ -172,7 +211,7 @@ class Obligation(_Frozen):
     due_hour: int = Field(ge=0, description="On time if settled by the end of this hour.")
     priority: int = Field(default=3, ge=1, le=9, description="1 = most urgent.")
     routes: tuple[Id, ...] = Field(min_length=1)
-    purpose: str = ""
+    purpose: Label = ""
 
 
 # ------------------------------------------------------------ disruptions and fixes
@@ -195,7 +234,7 @@ class Disruption(_Frozen):
     severity_pct: int = Field(default=100, ge=1, le=100, description="Share of capacity lost during the outage phase.")
     recovery_hours: int = Field(default=0, ge=0)
     recovery_capacity_pct: int = Field(default=50, ge=1, le=99)
-    description: str = ""
+    description: Text = ""
 
     @property
     def end_hour(self) -> int:
@@ -232,7 +271,7 @@ class BackupRouteIntervention(_Frozen):
     backup_route: Id
     active_from_hour: int = Field(ge=0)
     payers: tuple[Id, ...] | None = None
-    description: str = ""
+    description: Text = ""
 
 
 class BufferAllocation(_Frozen):
@@ -252,8 +291,8 @@ class LiquidityBufferIntervention(_Frozen):
     id: Id
     allocations: tuple[BufferAllocation, ...] = Field(min_length=1)
     funding_hour: int = Field(default=0, ge=0)
-    funder: str = "External liquidity provider (outside the accounting boundary)"
-    description: str = ""
+    funder: Label = "External liquidity provider (outside the accounting boundary)"
+    description: Text = ""
 
     @property
     def total(self) -> int:
@@ -267,7 +306,7 @@ class FasterRecoveryIntervention(_Frozen):
     id: Id
     disruption: Id
     duration_reduction_hours: int = Field(gt=0)
-    description: str = ""
+    description: Text = ""
 
 
 class CreditFacility(_Frozen):
@@ -289,8 +328,8 @@ class CreditLineIntervention(_Frozen):
     id: Id
     facilities: tuple[CreditFacility, ...] = Field(min_length=1)
     available_from_hour: int = Field(default=0, ge=0)
-    provider: str = "Credit provider (outside the accounting boundary)"
-    description: str = ""
+    provider: Label = "Credit provider (outside the accounting boundary)"
+    description: Text = ""
 
     @property
     def total_limit(self) -> int:
@@ -315,8 +354,8 @@ class OffsettingIntervention(_Frozen):
     type: Literal["offsetting"] = "offsetting"
     id: Id
     active_from_hour: int = Field(default=0, ge=0)
-    operator: str = "Payment system operator (clearing account outside the accounting boundary)"
-    description: str = ""
+    operator: Label = "Payment system operator (clearing account outside the accounting boundary)"
+    description: Text = ""
 
 
 class PriorityReserveIntervention(_Frozen):
@@ -337,12 +376,12 @@ class PriorityReserveIntervention(_Frozen):
     protected_priority: int = Field(default=1, ge=1, le=8, description="Payments with priority <= this are protected.")
     lookahead_hours: int = Field(default=24, ge=1, description="How far ahead protected payments are reserved for.")
     active_from_hour: int = Field(default=0, ge=0)
-    description: str = ""
+    description: Text = ""
 
 
 Intervention = Annotated[
-    Union[BackupRouteIntervention, LiquidityBufferIntervention, FasterRecoveryIntervention, CreditLineIntervention,
-          OffsettingIntervention, PriorityReserveIntervention],
+    BackupRouteIntervention | LiquidityBufferIntervention | FasterRecoveryIntervention | CreditLineIntervention
+    | OffsettingIntervention | PriorityReserveIntervention,
     Field(discriminator="type"),
 ]
 
@@ -373,10 +412,10 @@ class Scenario(_Frozen):
 
     schema_version: Literal["1.0"] = SCHEMA_VERSION
     id: Id
-    name: str
-    description: str = ""
+    name: Name
+    description: Text = ""
     synthetic: bool = True
-    disclaimer: str = DISCLAIMER
+    disclaimer: Text = DISCLAIMER
     currency: Currency
     horizon_hours: int = Field(ge=1, le=24 * 31)
     services: tuple[Service, ...] = Field(min_length=1)

@@ -24,17 +24,19 @@ import pandas as pd
 import streamlit as st
 from pydantic import TypeAdapter, ValidationError
 
-from cyberliquidity import DISCLAIMER, Scenario, Status
+from cyberliquidity import DISCLAIMER, Scenario, Status, __version__
 from cyberliquidity.analysis import criticality_scan, duration_profile, impact_surface, robustness, start_profile
+from cyberliquidity.audit import audit
 from cyberliquidity.briefing import briefing, disruption_phrase, robustness_paragraph
 from cyberliquidity.cascade import KIND_LABELS, analyse_cascade
 from cyberliquidity.compare import INTERVENTION_LABELS, compare, run_key
 from cyberliquidity.engine import CATEGORIES
 from cyberliquidity.explain import Explainer
-from cyberliquidity.export import bundle_zip, scenario_json
+from cyberliquidity.export import bundle_zip, scenario_digest, scenario_json
 from cyberliquidity.metrics import HEADLINE_METRICS, LOWER_IS_BETTER, RANKING_LABELS, mechanism_shares, obligation_rows
 from cyberliquidity.models import Disruption, Intervention
 from cyberliquidity.operational import OperationalModel
+from cyberliquidity.safety import APP_LIMITS, ScenarioInputError, friendly_errors, parse_scenario
 from cyberliquidity.sweep import OUTCOMES, buffer_sweep, liquidity_backstop
 from cyberliquidity.variants import (
     make_backup,
@@ -47,13 +49,23 @@ from cyberliquidity.variants import (
     replace,
     suggest_backup,
 )
-from ui import charts, network
+from ui import brand, charts, network
 from ui.charts import RunView
+from ui.layout import follow_theme_changes, guarded, plain, render_glossary, render_quick_start, show_chart
 from ui.report import build_report
 from ui.theme import CATEGORY_LABELS, STATUS_ICON, palette_for
 
-st.set_page_config(page_title="CyberLiquidity", page_icon="💧", layout="wide")
+st.set_page_config(
+    page_title="CyberLiquidity", page_icon=":material/water_drop:", layout="wide",
+    menu_items={"About": f"**CyberLiquidity {__version__}**: a deterministic research simulator that follows a cyber "
+                         f"outage through payment delays to cash shortfalls. {DISCLAIMER}"},
+)
 pal = palette_for(getattr(st.context.theme, "type", None))
+# Filled buttons only in light mode: white on the light-mode accent is 7:1, but on the dark-mode accent only 3.4:1
+# (below WCAG AA for text), so dark mode uses outlined buttons and keeps the accent for text (5.1:1).
+MAIN_BUTTON = "primary" if pal.mode == "light" else "secondary"
+follow_theme_changes()
+st.logo(brand.wordmark(pal), icon_image=brand.mark(pal), size="large")
 
 # Keep Stress-lab settings when that (lazily rendered) tab is closed and reopened.
 for _key in [k for k in st.session_state if isinstance(k, str) and k.startswith("lab:")]:
@@ -61,7 +73,7 @@ for _key in [k for k in st.session_state if isinstance(k, str) and k.startswith(
 
 SCENARIO_DIR = ROOT / "scenarios"
 MODEL_NOTE = ROOT / "docs" / "MODEL.md"
-UPLOAD = "Upload a scenario JSON…"
+UPLOAD = "Upload your own scenario…"
 KINDS = ["backup_route", "liquidity_buffer", "credit_line", "faster_recovery", "offsetting", "priority_reserve"]
 INTERVENTIONS = TypeAdapter(list[Intervention])
 
@@ -180,33 +192,55 @@ def lab_surface(base_json: str, service: str, starts: tuple[int, ...], durations
 
 # ----------------------------------------------------------------- scenario
 
+@st.cache_data(show_spinner=False)
+def scenario_titles(folder: str) -> dict[str, str]:
+    """Display names of the built-in scenarios (each file's "name"), keyed by file name."""
+    titles = {}
+    for path in sorted(Path(folder).glob("*.json")):
+        try:
+            titles[path.name] = str(json.loads(path.read_text(encoding="utf-8")).get("name") or path.name)
+        except (OSError, ValueError, AttributeError):
+            titles[path.name] = path.name
+    return titles
+
+
 with st.sidebar:
-    st.title("CyberLiquidity")
-    st.caption("Cyber-operational disruption → payment delay → liquidity propagation")
-    files = sorted(p.name for p in SCENARIO_DIR.glob("*.json"))
+    st.subheader("1 · Scenario", anchor=False)
+    titles = scenario_titles(str(SCENARIO_DIR))
+    files = list(titles)
     options = files + [UPLOAD]
-    choice = st.selectbox("Scenario", options, index=options.index("default_72h.json") if "default_72h.json" in files else 0)
+    choice = st.selectbox("Scenario", options, index=options.index("default_72h.json") if "default_72h.json" in files else 0,
+                          format_func=lambda f: titles.get(f, f), label_visibility="collapsed",
+                          help="The built-in scenarios are fictional and synthetic. You can also upload your own file.")
     if choice == UPLOAD:
-        upload = st.file_uploader("Scenario JSON (see docs/scenario.schema.json)", type=["json"])
+        upload = st.file_uploader("Scenario file (.json, up to 5 MB)", type=["json"],
+                                  help="The format is described in docs/scenario.schema.json. Use fictional data only.")
         if upload is None:
-            st.info("Upload a scenario file to continue.")
+            st.info("Upload a scenario file to continue. It is checked before anything is simulated.",
+                    icon=":material/upload_file:")
             st.stop()
-        scenario_text = upload.getvalue().decode("utf-8")
+        scenario_data: bytes | str = upload.getvalue()
+        source = "The uploaded file"
     else:
-        scenario_text = (SCENARIO_DIR / choice).read_text(encoding="utf-8")
+        scenario_data = (SCENARIO_DIR / choice).read_bytes()
+        source = "This scenario file"
     edit_key = f"edited:{choice}"
-    if edit_key in st.session_state:
-        scenario_text = st.session_state[edit_key]
-        st.info("Showing your **edited** version of this scenario (not saved to disk).", icon="✏️")
-        if st.button("Discard edits", key="discard_edits"):
+    edited_now = edit_key in st.session_state
+    if edited_now:
+        scenario_data = st.session_state[edit_key]
+        source = "The edited scenario"
+        st.info("Showing your **edited** version of this scenario (not saved to disk).", icon=":material/edit_note:")
+        if st.button("Discard edits", key="discard_edits", icon=":material/undo:"):
             del st.session_state[edit_key]
             st.rerun()
 
-try:
-    scenario = Scenario.model_validate_json(scenario_text)
-except ValidationError as exc:
-    st.error("This scenario was rejected by validation. Nothing was simulated.")
-    st.code(str(exc))
+try:  # size, encoding, structure and complexity checks (cyberliquidity.safety)
+    scenario = parse_scenario(scenario_data, APP_LIMITS, source=source)
+except ScenarioInputError as problem:
+    st.error(f"**{problem.title}.** Nothing was simulated.", icon=":material/block:")
+    if problem.problems:
+        st.markdown("\n".join(f"- {plain(line)}" for line in problem.problems))
+    st.caption("Fix the file and upload it again, or pick a built-in scenario in the sidebar.")
     st.stop()
 
 cur = scenario.currency
@@ -238,19 +272,25 @@ def fmt(value, kind: str) -> str:
     return str(value)
 
 
-def compact(minor: int, signed: bool = False) -> str:
-    """Auto-compact money for stat tiles (full values are in the tables)."""
+def compact(minor: int, signed: bool = False, unit: bool = True) -> str:
+    """Short money for stat tiles: three significant digits (229k, 1.85M). Exact values are in the tables."""
     value = cur.to_major(minor)
     size = abs(value)
-    if size >= 1e9:
-        text = f"{value / 1e9:.2f}B"
-    elif size >= 1e6:
-        text = f"{value / 1e6:.2f}M"
-    elif size >= 1e4:
-        text = f"{value / 1e3:.1f}k"
+    for scale, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "k")):
+        if size >= scale:
+            scaled = value / scale
+            digits = 0 if abs(scaled) >= 100 else 1 if abs(scaled) >= 10 else 2
+            text = f"{scaled:.{digits}f}{suffix}"
+            break
     else:
-        text = f"{value:,.{cur.minor_units}f}"
-    return f"{'+' if signed and value > 0 else ''}{text} {cur.code}"
+        text = f"{value:,.0f}" if float(value).is_integer() else f"{value:,.2f}"
+    return f"{'+' if signed and value > 0 else ''}{text}" + (f" {cur.code}" if unit else "")
+
+
+def metric(where, label: str, value, **kwargs) -> None:
+    """A metric tile with a border (consistent look across tabs)."""
+    kwargs.setdefault("border", True)
+    where.metric(label, value, **kwargs)
 
 
 def service_label(x: str) -> str:
@@ -273,18 +313,19 @@ d0 = scenario.disruptions[0] if scenario.disruptions else None
 default_service = d0.service if d0 else next((s.id for s in scenario.services if s.kind.value == "payment_provider"), service_ids[0])
 
 with st.sidebar:
-    st.header("B · Disruption")
-    service = st.selectbox("Disrupted service", service_ids, index=service_ids.index(default_service),
+    st.subheader("2 · Disruption (run B)", anchor=False,
+                 help="What goes wrong. Run A is the same scenario with nothing going wrong.")
+    service = st.selectbox("Service that fails", service_ids, index=service_ids.index(default_service),
                            format_func=service_label, key=f"{sid}:service")
     start = st.slider("Outage start (hour)", 0, H - 1, d0.start_hour if d0 else min(8, H - 1), key=f"{sid}:start")
     duration = st.slider("Outage duration (hours)", 1, H, d0.duration_hours if d0 and d0.duration_hours else min(12, H), key=f"{sid}:duration")
-    severity = st.slider("Degradation severity (% of capacity lost)", 10, 100, d0.severity_pct if d0 else 100, step=5,
-                         key=f"{sid}:severity", help="100 % means unavailable. Lower values leave a degraded service with reduced shared capacity.")
-    with st.expander("Recovery ramp (optional)"):
+    severity = st.slider("Capacity lost (%)", 10, 100, d0.severity_pct if d0 else 100, step=5,
+                         key=f"{sid}:severity", help="100 % means completely unavailable. Lower values leave a slower service with less shared capacity.")
+    with st.expander("Recovery ramp"):
         recovery_hours = st.slider("Degraded hours after the outage", 0, 24, d0.recovery_hours if d0 else 0, key=f"{sid}:rech")
         recovery_pct = st.slider("Capacity during the ramp (%)", 10, 90, d0.recovery_capacity_pct if d0 else 50, step=5, key=f"{sid}:recp")
     extra_disruptions = []
-    with st.expander("Concurrent disruptions (optional)"):
+    with st.expander("More disruptions at once"):
         n_extra = int(st.number_input("Additional disruptions at the same time", 0, 2, 0, key=f"{sid}:n_extra",
                                       help="For example a second cloud region or a provider failing during the first outage."))
         for i in range(n_extra):
@@ -315,8 +356,9 @@ for d in all_disruptions:
     down_everywhere.update(op_model.failure_footprint(d.service, d.severity_pct)["unavailable_services"])
 
 with st.sidebar:
-    st.header("C · Intervention")
-    chosen_kind = st.radio("Intervention shown as run C", KINDS, format_func=INTERVENTION_LABELS.get, key=f"{sid}:kind")
+    st.subheader("3 · Response (run C)", anchor=False,
+                 help="What could be done about it. Each response is added to run B on its own.")
+    chosen_kind = st.radio("Response shown as run C", KINDS, format_func=INTERVENTION_LABELS.get, key=f"{sid}:kind")
     st.caption("All six are compared on **Interventions & evidence**, each against the same stressed run B.")
 
     with st.expander("Backup payment provider", expanded=chosen_kind == "backup_route"):
@@ -407,6 +449,7 @@ with st.sidebar:
                    "the participant's protected payments due soon. It adds no money; it decides which payments wait, "
                    "and the payments it holds back are other participants' incoming money.")
 
+    st.subheader("4 · Ranking", anchor=False)
     pairs = st.toggle("Also run every pair of interventions", value=True, key="pairs",
                       help="Shows whether two interventions complement each other or overlap in this run.")
     rank_metric = st.selectbox("Ranking metric (lower = less disruption)", list(LOWER_IS_BETTER),
@@ -500,8 +543,7 @@ def describe_intervention(kind: str) -> str:
     return f"**C:** the outage is {iv.duration_reduction_hours} h shorter ({duration - iv.duration_reduction_hours} h instead of {duration} h)."
 
 
-with st.sidebar:
-    st.header("Export")
+def render_export() -> None:
     labels = {k: rv.label for k, rv in runs.items()}
     parameters = {
         "disruptions": [d.model_dump(mode="json") for d in all_disruptions],
@@ -527,13 +569,30 @@ with st.sidebar:
              "Re-run any folder with `cyberliquidity run <folder>/scenario.json` and compare the digest.",
     )
     st.download_button("Download stressed scenario (B) JSON", data=scenario_json(comparison.runs["B"].scenario),
-                       file_name=f"{sid}_stress.json", mime="application/json", on_click="ignore")
+                       file_name=f"{sid}_stress.json", mime="application/json", on_click="ignore", icon=":material/data_object:",
+                       help="The exact scenario simulated as run B. Run it again with `cyberliquidity run <file>`.")
 
 # --------------------------------------------------------------------- page
 
-st.warning(DISCLAIMER, icon="⚠️")
-st.markdown(f"### {scenario.name}")
-st.caption(scenario.description)
+title_col, action_col = st.columns([0.72, 0.28], vertical_alignment="center")
+with title_col:
+    st.header(plain(scenario.name), anchor=False)
+with action_col, st.container(horizontal=True, horizontal_alignment="right"):
+    with st.popover("Guide", icon=":material/help:", help="How to use this app, and what the terms mean"):
+        st.markdown("##### How to use this app")
+        render_quick_start(columns=False)
+        with st.expander("Glossary of terms", icon=":material/menu_book:"):
+            render_glossary()
+    with st.popover("Export", icon=":material/download:", type=MAIN_BUTTON,
+                    help="Download a shareable report, every run's raw data, or the stressed scenario"):
+        render_export()
+badges = [":orange-badge[:material/science: Synthetic data]", f":gray-badge[{H}-hour window]", f":gray-badge[{cur.code}]"]
+if edited_now:
+    badges.append(":violet-badge[:material/edit_note: Edited in this session]")
+st.markdown(" ".join(badges))
+if scenario.description:
+    st.caption(plain(scenario.description))
+st.info(f"{DISCLAIMER} All organisations and data are fictional.", icon=":material/info:")
 
 TAB_NAMES = ["Overview", "Contagion", "Network", "Timeline", "Interventions & evidence", "Stress lab",
              "Scenario editor", "Model & assumptions"]
@@ -542,19 +601,21 @@ TAB_NAMES = ["Overview", "Contagion", "Network", "Timeline", "Interventions & ev
 
 # ------------------------------------------------------------------ overview
 
-with tab_overview:
+with tab_overview, guarded("The Overview tab"):
+    with st.expander("New here? How to use this app in four steps", icon=":material/school:"):
+        render_quick_start()
     with st.container(border=True):
         st.markdown("#### The answer")
         for paragraph in brief:
             st.markdown(paragraph)
     s = scenario
     facts = st.columns(5)
-    facts[0].metric("Participants", len(s.participants), help="Funded businesses inside the accounting boundary.")
-    facts[1].metric("Services / routes", f"{len(s.services)} / {len(s.routes)}")
-    facts[2].metric("Obligations", len(s.obligations))
-    facts[3].metric("Scheduled value", compact(sum(o.amount for o in s.obligations)),
+    metric(facts[0], "Participants", len(s.participants), help="Funded businesses inside the accounting boundary.")
+    metric(facts[1], "Services / routes", f"{len(s.services)} / {len(s.routes)}")
+    metric(facts[2], "Obligations", len(s.obligations))
+    metric(facts[3], f"Scheduled value ({cur.code})", compact(sum(o.amount for o in s.obligations), unit=False),
                     help=money(sum(o.amount for o in s.obligations)))
-    facts[4].metric("Horizon", f"{H} h")
+    metric(facts[4], "Horizon", f"{H} h")
     st.markdown(disruption_text)
     st.markdown(describe_intervention(chosen_kind))
 
@@ -564,16 +625,16 @@ with tab_overview:
     def tiles(current: dict, reference: dict, tag: str) -> None:
         cols = st.columns(4)
         diff = {k: current[k] - reference[k] for k in ("delayed_value", "peak_overdue_value", "overdue_value_hours")}
-        cols[0].metric(f"On time ({tag})", f"{current['on_time_count']} / {current['obligations_count']}",
+        metric(cols[0], f"On time ({tag})", f"{current['on_time_count']} / {current['obligations_count']}",
                        delta=current["on_time_count"] - reference["on_time_count"],
                        help="Settled by the end of the due hour.")
-        cols[1].metric(f"Delayed value ({tag})", compact(current["delayed_value"]),
+        metric(cols[1], f"Delayed value ({tag})", compact(current["delayed_value"]),
                        delta=compact(diff["delayed_value"], True), delta_color="inverse",
                        help="Value of obligations settled late or still unsettled at the horizon. Not a loss estimate.")
-        cols[2].metric(f"Peak overdue value ({tag})", compact(current["peak_overdue_value"]),
+        metric(cols[2], f"Peak overdue value ({tag})", compact(current["peak_overdue_value"]),
                        delta=compact(diff["peak_overdue_value"], True), delta_color="inverse",
                        help="Largest value of overdue obligations at the end of any hour. Not the liquidity required.")
-        cols[3].metric(f"Overdue value × hours ({tag})", compact(current["overdue_value_hours"]) + "·h",
+        metric(cols[3], f"Overdue value × hours ({tag})", compact(current["overdue_value_hours"]) + "·h",
                        delta=compact(diff["overdue_value_hours"], True) + "·h", delta_color="inverse",
                        help="Sum over hours of the overdue value: a disruption-intensity measure, not a loss.")
 
@@ -586,15 +647,15 @@ with tab_overview:
     left, right = st.columns(2)
     with left:
         st.markdown("**Overdue obligations over time**")
-        st.plotly_chart(charts.overdue_chart(abc, pal, cur, "value"), theme=None, key="ov_overdue")
+        show_chart(charts.overdue_chart(abc, pal, cur, "value"), "ov_overdue")
     with right:
         st.markdown("**Settlement delay of completed payments**")
         include_zero = st.toggle("Include on-time payments (delay 0)", value=False, key="ov_zero")
-        st.plotly_chart(charts.delay_histogram(abc, pal, include_zero), theme=None, key="ov_delay")
+        show_chart(charts.delay_histogram(abc, pal, include_zero), "ov_delay")
         st.caption("Unsettled obligations have no completed delay; they are counted separately below.")
 
     st.markdown("**What held payments up** (overdue value × hours by blocking reason)")
-    st.plotly_chart(charts.mechanism_bars([rv for rv in abc if rv.key != "A"], summaries, pal, cur), theme=None, key="ov_mech")
+    show_chart(charts.mechanism_bars([rv for rv in abc if rv.key != "A"], summaries, pal, cur), "ov_mech")
     shares = mechanism_shares(B)
     if B["overdue_value_hours"]:
         st.caption("Run B: " + "; ".join(f"{CATEGORY_LABELS[c].split(' (')[0]} {shares[c]:.0%}" for c in CATEGORIES if shares[c]))
@@ -610,7 +671,7 @@ with tab_overview:
 
 # ----------------------------------------------------------------- contagion
 
-with tab_contagion:
+with tab_contagion, guarded("The Contagion tab"):
     st.markdown("#### How far does the disruption travel?")
     st.caption("Step 0 = payments held up directly by the outage. Step k = payments whose payer had a working route but "
                "was short of cash while waiting for delayed incoming payments, k such links away from a direct delay. "
@@ -626,12 +687,12 @@ with tab_contagion:
         short = cg.cash_short()
         indirect = cg.indirectly_affected()
         cols = st.columns(4)
-        cols[0].metric("Held up directly", cs["direct_count"], help=f"{money(cs['direct_value'])}: the route needed a disrupted service.")
-        cols[1].metric("Held up by contagion", cs["propagated_count"],
+        metric(cols[0], "Held up directly", cs["direct_count"], help=f"{money(cs['direct_value'])}: the route needed a disrupted service.")
+        metric(cols[1], "Held up by contagion", cs["propagated_count"],
                        help=f"{money(cs['propagated_value'])}: route worked, payer short of cash while waiting for delayed inflows.")
-        cols[2].metric("Contagion depth", f"{cs['max_generation'] or 0} step{'s' if (cs['max_generation'] or 0) != 1 else ''}",
+        metric(cols[2], "Contagion depth", f"{cs['max_generation'] or 0} step{'s' if (cs['max_generation'] or 0) != 1 else ''}",
                        help="Longest recorded chain from a direct delay to a delayed payment.")
-        cols[3].metric("Short of cash", len(short), help=f"{len(indirect)} of them never lost a payment route of their own.")
+        metric(cols[3], "Short of cash", len(short), help=f"{len(indirect)} of them never lost a payment route of their own.")
         if indirect:
             st.markdown("**Reached only through delayed incoming money** (their own routes never failed): "
                         + ", ".join(names[p] for p in sorted(indirect, key=lambda p: (cg.participants[p].first_cash_short_hour, p))) + ".")
@@ -645,7 +706,7 @@ with tab_contagion:
         left, right = st.columns(2)
         with left:
             st.markdown("**Delayed value by step**")
-            st.plotly_chart(charts.generation_bars(cg, pal, cur), theme=None, key="cg_generations")
+            show_chart(charts.generation_bars(cg, pal, cur), "cg_generations")
         with right:
             st.markdown("**Steps in this run**")
             st.dataframe(pd.DataFrame([{
@@ -680,7 +741,7 @@ with tab_contagion:
 
 # ------------------------------------------------------------------- network
 
-with tab_network:
+with tab_network, guarded("The Network tab"):
     controls = st.columns([2, 1, 2])
     layer = controls[0].radio("Layer", ["Operational dependencies", "Financial obligations", "Payment routing (coupling)"],
                               horizontal=True, key="net_layer")
@@ -753,17 +814,17 @@ with tab_network:
 
 # ------------------------------------------------------------------ timeline
 
-with tab_timeline:
+with tab_timeline, guarded("The Timeline tab"):
     selected = st.multiselect("Runs to compare", list(runs), default=[rv.key for rv in abc],
                               format_func=lambda k: runs[k].label, key="tl_runs")
     chosen = [runs[k] for k in selected] or abc
     left, right = st.columns(2)
     with left:
         st.markdown("**Overdue value (backlog) over time**")
-        st.plotly_chart(charts.overdue_chart(chosen, pal, cur, "value"), theme=None, key="tl_value")
+        show_chart(charts.overdue_chart(chosen, pal, cur, "value"), "tl_value")
     with right:
         st.markdown("**Overdue obligations (count) over time**")
-        st.plotly_chart(charts.overdue_chart(chosen, pal, cur, "count"), theme=None, key="tl_count")
+        show_chart(charts.overdue_chart(chosen, pal, cur, "count"), "tl_count")
     st.caption("Backlog recovery: " + "; ".join(
         f"{runs[k].label}: " + ("no outage" if summaries[k]["outage_end_hour"] is None else
                                 f"{summaries[k]['backlog_at_outage_end_count']} overdue at end of outage, "
@@ -774,7 +835,7 @@ with tab_timeline:
     credit_runs = [rv for rv in chosen if rv.result.credit_lines]
     if credit_runs:
         st.markdown("**Credit line outstanding** (end of hour, after cash repays draws)")
-        st.plotly_chart(charts.credit_outstanding(credit_runs, pal, cur), theme=None, key="tl_credit")
+        show_chart(charts.credit_outstanding(credit_runs, pal, cur), "tl_credit")
 
     detail_run = st.selectbox("Run for the detailed views below", [k for k in runs if k != "A"],
                               format_func=lambda k: runs[k].label, key="tl_detail")
@@ -782,21 +843,21 @@ with tab_timeline:
     measure = st.radio("Measure", ["value", "count"], horizontal=True, key="tl_measure",
                        format_func=lambda m: "Value" if m == "value" else "Count")
     st.markdown("**Overdue obligations by blocking reason** (mutually exclusive categories per obligation-hour)")
-    st.plotly_chart(charts.blocked_by_reason(detail, pal, cur, measure), theme=None, key="tl_reasons")
+    show_chart(charts.blocked_by_reason(detail, pal, cur, measure), "tl_reasons")
     st.markdown("**Service capacity lost** (hover for state, capacity and usage)")
-    st.plotly_chart(charts.service_heatmap(detail, pal), theme=None, key="tl_heat")
+    show_chart(charts.service_heatmap(detail, pal), "tl_heat")
     limited = [x for x in service_ids if services[x].capacity_per_hour is not None]
     if limited:
         usage_service = st.selectbox("Service throughput", limited, index=limited.index("psp_alpha") if "psp_alpha" in limited else 0,
                                      format_func=names.get, key="tl_usage_service")
-        st.plotly_chart(charts.capacity_usage(detail, usage_service, pal), theme=None, key="tl_usage")
+        show_chart(charts.capacity_usage(detail, usage_service, pal), "tl_usage")
 
     st.markdown("**Cash balances by participant** (end of hour)")
     short_b = summaries["B"]["participants_cash_short"]
     default_people = short_b or participant_ids[:6]
     people = st.multiselect("Participants", participant_ids, default=default_people, format_func=names.get, key=f"{sid}:tl_people")
     if people:
-        st.plotly_chart(charts.balance_multiples(chosen, people, names, pal, cur), theme=None, key="tl_bal")
+        show_chart(charts.balance_multiples(chosen, people, names, pal, cur), "tl_bal", table=False)
     with st.expander("Table view: hourly series"):
         st.dataframe(pd.DataFrame([{
             "Hour": h.hour, **{f"{runs[k].label} overdue": money(runs[k].result.hours[h.hour].overdue_value) for k in selected},
@@ -805,7 +866,7 @@ with tab_timeline:
 
 # ------------------------------------------------------- interventions/evidence
 
-with tab_evidence:
+with tab_evidence, guarded("The Interventions & evidence tab"):
     st.markdown(f"#### {len(intervention_keys)} interventions against the same stressed run B")
     st.caption("Rankings below describe this scenario under its declared assumptions only. They are not general "
                "statements about which intervention is better.")
@@ -816,9 +877,8 @@ with tab_evidence:
         raw = summaries[k][rank_metric]
         rows.append({"label": runs[k].label, "kind": runs[k].kind, "raw": raw,
                      "value": cur.to_major(raw) if money_metric else raw})
-    st.plotly_chart(charts.intervention_bars(rows, pal, METRIC_LABEL.get(rank_metric, rank_metric),
-                                             lambda v: fmt(v, METRIC_KIND.get(rank_metric, "count"))),
-                    theme=None, key="ev_bars")
+    show_chart(charts.intervention_bars(rows, pal, METRIC_LABEL.get(rank_metric, rank_metric),
+                                        lambda v: fmt(v, METRIC_KIND.get(rank_metric, "count"))), "ev_bars")
     ranking = comparison.ranking(rank_metric)
 
     def change_text(row: dict) -> str:
@@ -853,7 +913,7 @@ with tab_evidence:
     if robust_text:
         st.markdown(robust_text)
     robust_labels = {k: INTERVENTION_LABELS[k] for k in robust["plans"]}
-    st.plotly_chart(charts.robustness_heatmap(robust, robust_labels, pal, cur), theme=None, key="ev_robust")
+    show_chart(charts.robustness_heatmap(robust, robust_labels, pal, cur), "ev_robust")
     regret_kind = METRIC_KIND.get(rank_metric, "count")
     st.dataframe(pd.DataFrame([{
         "Intervention": robust_labels[k],
@@ -882,7 +942,7 @@ with tab_evidence:
             if x["combined_pct"] is not None:
                 prow.append({"key": k, "label": runs[k].label.replace("C · ", ""), **x})
         if prow:
-            st.plotly_chart(charts.package_dumbbell(prow, pal), theme=None, key="ev_pairs")
+            show_chart(charts.package_dumbbell(prow, pal), "ev_pairs")
             st.dataframe(pd.DataFrame([{
                 "Combination": r["label"], "Removed together": f"{r['combined_pct']:.0f}%",
                 "Expected if independent": f"{r['independent_pct']:.0f}%", "Difference": f"{r['excess_pp']:+.1f} pp",
@@ -906,7 +966,7 @@ with tab_evidence:
     if backstop.rows:
         left, right = st.columns([3, 2])
         with left:
-            st.plotly_chart(charts.backstop_bars(backstop, names, pal, cur), theme=None, key="ev_backstop")
+            show_chart(charts.backstop_bars(backstop, names, pal, cur), "ev_backstop")
         with right:
             st.dataframe(pd.DataFrame([{
                 "Participant": names[r["participant"]], "Pre-funding needed": money(r["allocation"]),
@@ -940,7 +1000,7 @@ with tab_evidence:
         (st.success if sweep.smallest_achieving else st.info)(sweep.verdict(money))
         left, right = st.columns([3, 2])
         with left:
-            st.plotly_chart(charts.sweep_chart(sweep, pal, cur), theme=None, key="ev_sweep")
+            show_chart(charts.sweep_chart(sweep, pal, cur), "ev_sweep")
             st.caption("Filled marker = outcome achieved at that buffer size; hollow = not achieved.")
         with right:
             st.dataframe(pd.DataFrame([{
@@ -983,7 +1043,7 @@ with tab_evidence:
         st.markdown(" → ".join(f"`{step.short}`" for step in explanation.chain))
         for step in explanation.chain:
             refs = ", ".join(f"E{e}" for e in step.event_ids if e)
-            st.markdown(f"- {step.text} " + (f"<span style='opacity:0.7'>[{refs}]</span>" if refs else ""), unsafe_allow_html=True)
+            st.markdown(f"- {step.text}" + (f" :gray[(events {refs})]" if refs else ""))
         base_outcome = runs["A"].result.outcomes[oid]
         st.caption(f"In baseline A this obligation settled in hour {base_outcome.settled_hour} "
                    f"({base_outcome.status.value.replace('_', ' ')}). {explanation.caveat}")
@@ -1025,7 +1085,7 @@ PLAN_LABELS = {"none": "No intervention", **{k: INTERVENTION_LABELS[k] for k in 
 PLAN_KINDS = {"none": "stress", **{k: k for k in KINDS}}
 LAB_METRICS = ["overdue_value_hours", "delayed_count", "delayed_value", "unsettled_value", "peak_overdue_value"]
 
-with tab_lab:
+with tab_lab, guarded("The Stress lab"):
     if tab_lab.open is False:
         st.caption("Open this tab to run the systematic analyses.")
     else:
@@ -1047,7 +1107,7 @@ with tab_lab:
                     f"{RANKING_LABELS.get(lab_metric, lab_metric)}). Ranks can change with the start hour: see section 3.")
         left, right = st.columns([2, 3])
         with left:
-            st.plotly_chart(charts.criticality_bars(scan, names, pal, cur, selected=service), theme=None, key="lab_scan_chart")
+            show_chart(charts.criticality_bars(scan, names, pal, cur, selected=service), "lab_scan_chart")
         with right:
             st.dataframe(pd.DataFrame([{
                 "Service": names[r_["service"]], "Routes down": len(r_["routes_unavailable"]),
@@ -1081,9 +1141,9 @@ with tab_lab:
         if prof_durations:
             prof = lab_profile(base_json, prof_service, start, prof_durations, severity, recovery_hours, prof_specs,
                                prof_outcome, json.dumps([d.model_dump(mode="json") for d in extra_disruptions]))
-            st.plotly_chart(charts.profile_lines(prof["rows"], "duration_h", "Outage duration (hours)", PLAN_LABELS, PLAN_KINDS,
-                                                 pal, cur, marker_x=duration if prof_service == service else None,
-                                                 marker_label="B"), theme=None, key="lab_profile_chart")
+            show_chart(charts.profile_lines(prof["rows"], "duration_h", "Outage duration (hours)", PLAN_LABELS, PLAN_KINDS,
+                                            pal, cur, marker_x=duration if prof_service == service else None,
+                                            marker_label="B"), "lab_profile_chart")
             tol_rows = []
             for plan, tol in prof["tolerance"].items():
                 tol_rows.append({
@@ -1112,9 +1172,9 @@ with tab_lab:
         starts = tuple(range(0, last_start + 1))
         start_specs = json.dumps({k: v for k, v in plan_specs.items() if k == compare_plan}, sort_keys=True)
         srows = lab_starts(base_json, prof_service, start_duration, starts, severity, recovery_hours, start_specs)
-        st.plotly_chart(charts.profile_lines(srows, "start_hour", "Outage start hour", PLAN_LABELS, PLAN_KINDS, pal, cur,
-                                             marker_x=start if prof_service == service else None, marker_label="B"),
-                        theme=None, key="lab_start_chart")
+        show_chart(charts.profile_lines(srows, "start_hour", "Outage start hour", PLAN_LABELS, PLAN_KINDS, pal, cur,
+                                        marker_x=start if prof_service == service else None, marker_label="B"),
+                   "lab_start_chart")
         none_rows = [x for x in srows if x["plan"] == "none"]
         if none_rows:
             hi = max(none_rows, key=lambda x: (x["overdue_value_hours"], -x["start_hour"]))
@@ -1130,13 +1190,13 @@ with tab_lab:
             grid_starts = tuple(range(0, H, 2))
             grid_durations = tuple(d for d in (1, 2, 4, 6, 8, 12, 16, 24, 36) if d <= H)
             surf = lab_surface(base_json, prof_service, grid_starts, grid_durations, severity)
-            st.plotly_chart(charts.surface_heatmap(surf, pal, cur), theme=None, key="lab_surface_chart")
+            show_chart(charts.surface_heatmap(surf, pal, cur), "lab_surface_chart")
             st.caption(f"Overdue value × hours with no intervention, {len(grid_starts) * len(grid_durations)} runs. "
                        "Darker = more disruption. Long outages that start late run past the horizon.")
 
 # ------------------------------------------------------------ scenario editor
 
-with tab_editor:
+with tab_editor, guarded("The scenario editor"):
     st.markdown("#### Edit the scenario")
     st.caption("Change balances, capacities and the payment schedule, then validate. Edits live only in this browser "
                "session (nothing is written to disk) and every edit is re-validated; download the JSON to keep it. "
@@ -1170,7 +1230,7 @@ with tab_editor:
                 "due hour": st.column_config.NumberColumn(min_value=0, max_value=H - 1, step=1),
                 "priority": st.column_config.NumberColumn(min_value=1, max_value=9, step=1, help="1 = most urgent"),
             })
-        submitted = st.form_submit_button("Validate and apply", type="primary")
+        submitted = st.form_submit_button("Validate and apply", type=MAIN_BUTTON)
     if submitted:
         def _num(value, default=None):
             if value is None or (isinstance(value, float) and math.isnan(value)):
@@ -1202,10 +1262,10 @@ with tab_editor:
             data["obligations"] = obligations_out
             edited = Scenario.model_validate(data)
         except ValidationError as exc:
-            st.error("Not applied: the edited scenario failed validation. Fix these and apply again.")
-            st.code("\n".join(f"- {e['msg']}" for e in exc.errors())[:6000])
+            st.error("Not applied: the edited scenario failed validation. Fix these and apply again.", icon=":material/block:")
+            st.markdown("\n".join(f"- {plain(line)}" for line in friendly_errors(exc)))
         except (TypeError, ValueError, KeyError) as exc:
-            st.error(f"Not applied: {exc}")
+            st.error(f"Not applied: {plain(str(exc))}", icon=":material/block:")
         else:
             st.session_state[edit_key] = scenario_json(edited)
             for k in ("ed:parts", "ed:svc", "ed:obl", "ed:bal_pct", "ed:amt_pct", "ed:shift"):
@@ -1218,10 +1278,28 @@ with tab_editor:
 
 # ---------------------------------------------------------------------- model
 
-with tab_model:
+with tab_model, guarded("The model note"):
+    with st.expander("Glossary of terms", icon=":material/menu_book:", expanded=True):
+        render_glossary()
     if MODEL_NOTE.exists():
         st.markdown(MODEL_NOTE.read_text(encoding="utf-8"))
     else:
         st.info("docs/MODEL.md not found.")
     with st.expander("Scenario JSON for run B (exactly what was simulated)"):
         st.code(json.dumps(comparison.runs["B"].scenario.model_dump(mode="json"), indent=2)[:20000], language="json")
+
+# ---------------------------------------------------------------------- footer
+
+st.divider()
+audits = {key: audit(rv.result) for key, rv in runs.items()}
+failed = {key: report for key, report in audits.items() if not report.ok}
+if failed:
+    st.error("**Integrity audit failed** for " + ", ".join(runs[k].label for k in failed) + ". Do not rely on these "
+             "numbers; please report this as a bug.\n\n"
+             + "\n".join(f"- {plain(line)}" for report in failed.values() for line in report.failures[:3]),
+             icon=":material/gpp_bad:")
+else:
+    movements = sum(report.entries for report in audits.values())
+    st.caption(f":material/verified_user: **Integrity audit passed** for all {len(audits)} runs on this page: "
+               f"{movements:,} cash movements replay exactly to every recorded balance.  \n"
+               f"CyberLiquidity {__version__} · scenario digest `{scenario_digest(scenario)[:16]}` · {DISCLAIMER}")

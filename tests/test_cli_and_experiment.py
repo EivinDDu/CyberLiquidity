@@ -52,7 +52,8 @@ def test_experiment_reproduces_and_finds_all_three_mechanisms(tmp_path):
     out = tmp_path / "one"
     a = experiment.run(SCENARIOS / "default_72h.json", out)
     assert (out / "comparison.png").stat().st_size > 10_000
-    rows = list(csv.DictReader((out / "results.csv").open()))
+    with (out / "results.csv").open(encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
     n_interventions = 7  # none, backup, two buffers, credit line, faster recovery, backup + buffer
     assert len(rows) == len(experiment.CASES) * len(experiment.DURATIONS) * n_interventions * len(experiment.SETTINGS)
 

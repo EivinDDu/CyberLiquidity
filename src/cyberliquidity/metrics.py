@@ -141,7 +141,7 @@ def summarize(r: SimulationResult) -> dict[str, Any]:
     via_backup = [o for o in outcomes if o.via_backup]
     via_offsetting = [o for o in outcomes if o.via_offsetting]
     urgent = [o for o in outcomes if o.priority == 1]
-    held = [b for b in r.blocks if b.held_by_reserve]
+    held = [b for b in r.blocks if b.reserved and b.held_by_reserve]  # only reserve-rule blocks can qualify
     held_ids = {b.obligation_id for b in held}
     totals = r.totals
     conservation_ok = totals["final_internal_cash"] == (

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cyberliquidity"
-version = "0.3.0"
+version = "0.4.0"
 description = "Deterministic research simulator linking cyber-operational service disruptions to payment delays and liquidity propagation (synthetic data only)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,7 +15,7 @@ dependencies = ["pydantic>=2.11,<3"]
 [project.optional-dependencies]
 app = ["streamlit>=1.50", "plotly>=6", "pandas>=2.2"]
 experiment = ["matplotlib>=3.9"]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "hypothesis>=6.100", "ruff>=0.15", "bandit>=1.8", "pip-audit>=2.9"]
 
 [project.scripts]
 cyberliquidity = "cyberliquidity.cli:main"
@@ -27,3 +27,33 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src", "app"]
 addopts = "-ra"
+# Any warning (deprecations included) fails the suite, so problems surface here and not in the app.
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 125
+target-version = "py311"
+extend-exclude = [".venv", "runs"]
+
+[tool.ruff.lint]
+# pyflakes, import/syntax errors, likely bugs (bugbear), import order, modern syntax, and
+# security-relevant patterns (flake8-bandit; the full bandit scan also runs in CI).
+select = ["E4", "E7", "E9", "F", "B", "I", "UP", "S"]
+ignore = [
+    "B905",  # zip() without strict=: lengths are equal by construction where it is used
+    "S311",  # random is used for seeded *synthetic scenario generation*, never for security
+    "UP042",  # (str, Enum) kept: StrEnum would change how enum members print in exports
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is how pytest checks
+"tests/reference_model.py" = ["B023"]  # helpers are defined and called inside the same hour (deliberately literal)
+"benchmarks/**" = ["S101", "E402"]  # imports follow the src/ path fallback
+"app/streamlit_app.py" = ["E402"]  # imports follow the src/ path fallback
+
+[tool.ruff.lint.isort]
+known-first-party = ["cyberliquidity", "ui"]
+
+[tool.bandit]
+# B311: `random` only generates seeded synthetic test scenarios (generator.py), never anything secret.
+skips = ["B311"]

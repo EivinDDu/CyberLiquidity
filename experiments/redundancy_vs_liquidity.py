@@ -341,7 +341,7 @@ def findings_markdown(a: dict, base: Scenario, config: dict) -> str:
         "|---|---:|---:|---:|---:|---:|---|",
     ]
     for m in a["mechanisms"]:
-        def pct(key: str) -> str:
+        def pct(key: str, m: dict = m) -> str:
             value = m[key]
             return f"{float(value) * 100:.0f}%" if value not in ("", None) else "-"
         lines.append(f"| {m['case']} | {m['duration_h']} | {pct('share_operational_only')} | {pct('share_operational_and_cash')} | "

@@ -45,7 +45,7 @@ def test_variants_change_one_assumption_at_a_time(default):
     assert all(s.capacity_per_hour is None or s.capacity_per_hour <= o.capacity_per_hour
                for s, o in zip(by_key["capacity_lower"][0].services, base.services))
     # everything else is untouched in each variant
-    for key, (scenario, ds) in by_key.items():
+    for key, (scenario, _ds) in by_key.items():
         assert scenario.obligations == base.obligations, key
 
 

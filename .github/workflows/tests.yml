@@ -4,27 +4,61 @@ on:
   push:
   pull_request:
 
+# Read-only token: the workflow only checks out and tests the code.
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # Third-party actions are pinned to full commit SHAs (Dependabot keeps them current).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: requirements.txt
-      - name: Install the pinned direct dependencies and the package
+          cache-dependency-path: requirements*.txt
+      - name: Install the pinned dependencies and the package
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install -r requirements.txt hypothesis==6.170.17
           python -m pip install -e .
-      - name: Run the test suite
+      - name: Run the test suite (any warning fails it)
         run: python -m pytest -q
+
+  checks:
+    name: lint and security checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install the pinned tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lint (ruff, including its flake8-bandit security rules)
+        run: ruff check src app tests experiments benchmarks
+      - name: Static security scan (bandit)
+        run: bandit -q -c pyproject.toml -r src app
+      - name: Known vulnerabilities in the pinned dependencies (pip-audit)
+        run: pip-audit -r requirements.txt -r requirements-dev.txt --progress-spinner off

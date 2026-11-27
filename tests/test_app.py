@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -35,11 +36,60 @@ def _text(at: AppTest) -> str:
 
 def test_default_scenario_renders_with_disclaimer_and_the_answer():
     at = _app()
-    assert any(DISCLAIMER in w.value for w in at.warning)
+    assert any(DISCLAIMER in i.value for i in at.info)  # the synthetic-data notice is always on the page
     text = _text(at)
     assert "#### The answer" in text and "payments are delayed" in text and "run short of cash" in text
     assert "Baseline vs stress vs intervention" in text
+    assert ":orange-badge[:material/science: Synthetic data]" in text
     assert len(at.dataframe) >= 4
+
+
+def test_footer_reports_the_integrity_audit_of_every_run():
+    at = _app()
+    footer = next(c.value for c in at.caption if "Integrity audit" in c.value)
+    runs = int(re.search(r"for all (\d+) runs on this page", footer).group(1))
+    assert runs >= 8 and "**Integrity audit passed**" in footer  # A, B, the six responses and the pairs
+    assert DISCLAIMER in footer and "scenario digest" in footer
+
+
+def test_guide_and_export_menus():
+    at = _app()
+    text = _text(at)
+    assert "1 · Pick a scenario" in text and "4 · Read the answer" in text  # quick start (Overview and Guide menu)
+    assert "**Gridlock**" in text  # glossary
+    labels = [b.proto.label for b in at.get("download_button")]
+    assert labels == ["Download briefing report (.html)", "Download all runs (.zip)", "Download stressed scenario (B) JSON"]
+
+
+def test_a_scenario_that_fails_the_checks_is_explained_not_simulated():
+    at = AppTest.from_file(APP, default_timeout=120)
+    at.session_state["edited:default_72h.json"] = '{"id": "x", "participants": "<b>not a list</b>"}'
+    _run(at)
+    assert [e.value for e in at.error] == ["**The edited scenario is not a valid scenario.** Nothing was simulated."]
+    problems = next(m.value for m in at.markdown if m.value.startswith("- "))
+    assert "participants\\: Input should be a valid array" in problems and "<b>" not in problems  # escaped Markdown
+    assert not at.tabs  # stopped before anything was simulated
+
+
+def test_error_boundary_contains_a_failure_to_its_section():
+    def page():
+        import streamlit as st
+
+        from ui.layout import guarded
+
+        with guarded("The first section"):
+            raise ValueError("boom")
+        st.markdown("after the first section")
+        with guarded("The second section"):
+            st.stop()  # Streamlit's own control flow passes through
+        st.markdown("never shown")
+
+    at = AppTest.from_function(page)
+    at.run()
+    assert not at.exception
+    assert at.error[0].value.startswith("**The first section could not be shown.**")
+    assert [m.value for m in at.markdown] == ["after the first section"]
+    assert at.caption[0].value == "Error type: `ValueError`"
 
 
 @pytest.mark.parametrize("tab", TABS)

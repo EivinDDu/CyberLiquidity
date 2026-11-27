@@ -163,7 +163,7 @@ def routing_dot(result: SimulationResult, hour: int, pal: Palette) -> str:
         if any(svc.id in r.path for r in s.routes):
             lines.append(_service_node(svc.id, svc.name, status[svc.id], used.get(svc.id, 0), False, pal))
     for (party, route_id, is_backup), count in sorted(usage.items()):
-        style = ', style=dashed, label="backup (%d)"' % count if is_backup else f', label="{count}"'
+        style = f', style=dashed, label="backup ({count})"' if is_backup else f', label="{count}"'
         lines.append(f'"{_esc(party)}" -> "{_esc(route_id)}" [color="{pal.text2}"{style}];')
     for route in s.routes:
         for step, sid in enumerate(route.path, start=1):

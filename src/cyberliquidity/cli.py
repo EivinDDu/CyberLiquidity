@@ -22,13 +22,12 @@ import json
 import sys
 from pathlib import Path
 
-from pydantic import ValidationError
-
 from .compare import compare
 from .engine import simulate
-from .export import bundle_zip, export_run, load_scenario, rows_to_csv, save_scenario, scenario_digest
+from .export import bundle_zip, export_run, rows_to_csv, save_scenario, scenario_digest
 from .metrics import HEADLINE_METRICS, summarize
 from .models import DISCLAIMER, Scenario
+from .safety import CLI_LIMITS, Limits, ScenarioInputError, parse_scenario
 from .sweep import OUTCOMES, buffer_sweep, liquidity_backstop
 from .variants import stress
 
@@ -51,12 +50,32 @@ def _print_summary(summary: dict, scenario: Scenario) -> None:
     print(f"  {'Cash conserved within the accounting boundary':<55} {summary['conservation_ok']}")
 
 
+_limits: Limits | None = CLI_LIMITS  # --allow-large switches the size and complexity checks off
+
+
 def _load(path: str) -> Scenario:
+    """Read and validate a scenario file; explain any problem in plain language and exit with status 2."""
+    file = Path(path)
     try:
-        return load_scenario(path)
-    except ValidationError as exc:
-        print(f"Scenario rejected: {path}\n{exc}", file=sys.stderr)
-        raise SystemExit(2) from exc
+        data = file.read_bytes()
+    except FileNotFoundError:
+        _refuse(path, f"There is no file at {path}", ["check the path (built-in scenarios are in scenarios/)"])
+    except IsADirectoryError:
+        _refuse(path, f"{path} is a folder, not a scenario file", [])
+    except PermissionError:
+        _refuse(path, f"{path} cannot be read (permission denied)", [])
+    try:
+        return parse_scenario(data, _limits, source=file.name)
+    except ScenarioInputError as exc:
+        hint = ["run with --allow-large to simulate it anyway"] if "larger than" in exc.title else []
+        _refuse(path, exc.title, exc.problems + hint)
+
+
+def _refuse(path: str, title: str, problems: list[str]):
+    print(f"Scenario not loaded: {title}.", file=sys.stderr)
+    for line in problems:
+        print(f"  - {line}", file=sys.stderr)
+    raise SystemExit(2)
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -292,6 +311,8 @@ def cmd_schema(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cyberliquidity", description=DISCLAIMER)
+    parser.add_argument("--allow-large", action="store_true",
+                        help="skip the size and complexity limits for scenario files (see cyberliquidity.safety)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("validate", help="validate a scenario JSON file")
@@ -371,7 +392,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global _limits
     args = build_parser().parse_args(argv)
+    _limits = None if args.allow_large else CLI_LIMITS
     return args.func(args)
 
 

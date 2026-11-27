@@ -2,6 +2,77 @@
 
 All results are synthetic and conditional on the model's assumptions (docs/MODEL.md).
 
+## 0.4.0 (2026-11-27)
+
+### Engine: faster, with the same results
+- **Same results as 0.3.** Events, ledger, balances and outcomes are unchanged for every scenario. Only the engine version stamped into new result digests differs. How this was checked:
+  - 114 recorded 0.3 result digests are reproduced byte for byte (`tests/golden_v03_digests.json`);
+  - during development, 368 complete results (14 parts each) and 142 backstop answers were compared with the 0.3 code;
+  - both experiments were regenerated: every simulated number is the same, only the digests and the backstop's run counts changed.
+- **Speed** (`benchmarks/bench_engine.py`; medians of three interleaved rounds of five runs, Python 3.13.7, Apple M4):
+
+  | Workload | 0.3 | 0.4 | Change |
+  |---|---:|---:|---:|
+  | One stress run (default scenario) | 3.2 ms | 2.3 ms | −28% |
+  | Compare all interventions and pairs (default / cluster) | 24.5 / 36.4 ms | 17.1 / 25.7 ms | −30% / −29% |
+  | Exact liquidity backstop (default) | 285.6 ms | 102.0 ms | −64% |
+  | Robustness check, 10 variants (default / cluster) | 121.4 / 120.6 ms | 87.7 / 85.8 ms | −28% / −29% |
+  | Six random networks (40 firms, 800 payments) | 1,081.6 ms | 682.8 ms | −37% |
+  | **All seven workloads** | **1,673.4 ms** | **1,003.4 ms** | **−40%** |
+
+  Timings depend on the machine; the benchmark script reproduces them.
+- How: each hour's route checks are computed once and shared; the offsetting search is incremental (it rebuilds only when an earlier payment in the set caused a capacity failure); service status is cached per set of active disruptions; block flags are filled in once; unnecessary queue sorts are skipped.
+- **Liquidity backstop** (model note 7.5, step 5): a trial run stops at the end of the first hour in which it can no longer reproduce the target outcome, and an allocation that was already tried is not run again. Neither changes the answer.
+  - New field `runs_stopped_early`.
+  - `runs_used` is lower. Default scenario: 93 → 90, and 86 of the 90 stopped early. Circular-trade cluster: 101 → 98. Three-participant check: 13 → 11.
+- The engine no longer uses `assert` for an internal check; it raises `InvariantViolation` instead, so the check also runs under `python -O`.
+
+### Protective layers
+- **Input checks** (`cyberliquidity.safety`). Scenario files must pass four checks before anything is simulated: size, UTF-8 encoding, structure and complexity.
+  - Problems are listed in plain language and never echo the file's content.
+  - The app accepts smaller scenarios than the command line. `--allow-large` lifts the command-line limits.
+- **Plain-text fields.** Names, labels and descriptions cannot contain invisible or control characters (such as right-to-left overrides). Names and labels also reject markup (`< > [ ] \` and backticks) and web addresses. Lengths are capped.
+- **CSV exports neutralise spreadsheet formulas.** A text cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe; numbers are left alone.
+- **Integrity audit** (`cyberliquidity.audit`). Every run shown in the app is re-checked independently, and the result appears at the bottom of the page. The audit:
+  - replays the cash ledger to every recorded balance;
+  - checks event and ledger numbering and settlement events;
+  - compares the final totals.
+- **The app never renders raw HTML.** Text taken from a scenario file is shown as plain text.
+- **Each tab is contained.** An unexpected error is reported in its own tab, and the rest of the app keeps working; details go to the terminal only.
+- **Hardened app configuration**: localhost only, 5 MB upload limit, explicit XSRF protection, no usage statistics, short error messages in the browser, developer menu hidden.
+- **CI**:
+  - third-party actions pinned to commit SHAs, with a read-only token;
+  - a lint and security job (ruff with its security rules, bandit, pip-audit);
+  - the test suite treats any warning as a failure;
+  - Dependabot proposes monthly updates.
+- New `SECURITY.md` explains how to report a problem privately.
+
+### App: cleaner, easier to use
+- **New look**:
+  - the Inter typeface, self-hosted (SIL Open Font License, `app/static/fonts/`), so no internet connection is needed;
+  - light and dark themes, with text contrast checked against WCAG AA;
+  - a logo and Material icons;
+  - bordered metric tiles with shorter values (three significant digits).
+- **Clearer structure**:
+  - the sidebar runs in four numbered steps: Scenario → Disruption (run B) → Response (run C) → Ranking;
+  - the header has *Guide* and *Export* menus and short facts about the scenario;
+  - the synthetic-data notice stays visible on every page.
+- **Help for new users**:
+  - a four-step quick start (Overview tab and Guide menu);
+  - a plain-language glossary of 20 terms (Guide menu and Model tab);
+  - scenario names instead of file names, and plainer control labels.
+- **Accessible numbers**: every bar and line chart has *Show the numbers as a table*, read from the chart itself.
+- **Readable errors**: problems with an uploaded or edited scenario are listed in plain language.
+
+### Tests and tooling
+- 486 tests, run on Python 3.13.7 and 3.11.13. New in this release:
+  - property-based fuzzing of the loader, the audit and the CSV guard (Hypothesis);
+  - the input-check and audit tests;
+  - the 0.3 golden digests;
+  - tests that each speed-up gives exactly the slow path's answer;
+  - tests of the app's error boundary and of the integrity footer.
+- `requirements-dev.txt` holds the pinned development tools. New `make` targets: `dev`, `lint`, `audit` and `bench`.
+
 ## 0.3.0 (2026-11-27)
 
 ### Model and engine
